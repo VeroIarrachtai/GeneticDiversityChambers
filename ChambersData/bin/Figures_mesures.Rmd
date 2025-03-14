@@ -1,0 +1,1029 @@
+---
+title: "Ozono_concentration_chambers"
+author: "Vero"
+date: "28/10/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#LOAD LIBRARIES
+```{r}
+#Load libraries
+library(openxlsx)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(car)
+library(MASS)
+```
+
+# INFO
+```{r }
+
+my_comparisons <- list(c("ambient_air_SRX", "ambient_air_IE"), c("ambient_air_SRX", "purified_air"), c("ambient_air_SRX", "ozone_moderate"), c("ambient_air_SRX", "ozone_contingency"), c("ambient_air_IE", "purified_air"), c("ambient_air_IE", "ozone_moderate"), c("ambient_air_IE", "ozone_contingency"), c("purified_air", "ozone_moderate"),c("purified_air", "ozone_contingency"),c("ozone_moderate", "ozone_contingency"))
+
+labels_ALL <- c( "nursery","purified air","ambient air UNAM", 
+  "moderate","contingency"
+)
+
+
+labels_woSRX <- c(
+  purified_air = "purified air",
+  ambient_air_IE = "ambient air UNAM",
+  ozone_moderate = "moderate",
+  ozone_contingency = "contingency"
+  
+)
+
+#d3453a: Un rojo intenso.
+#bcb635: Un amarillo verdoso, similar al color mostaza.
+#48b1da: Un azul claro o azul celeste.
+#5cc051: Un verde brillante.
+#697329: Un verde oliva o un verde oscuro.
+colors_ALL <- c("#697329", "#48b1da", "#5cc051", "#bcb635", "#d3453a" )
+
+colors_woSRX <- c("#48b1da", "#5cc051",  "#bcb635", "#d3453a" )
+
+colors_ozoned <- c( "#5cc051",  "#bcb635", "#d3453a" )
+
+colors_relatedness <- c("#688ccd",
+"#69b44c","#7962cb","#c4aa42","#c163ba","#4bb193","#d04c41","#6e7f38","#c75980","#c27945")
+
+#Number of chambers and treatments
+# Chambers ambient_air_IE == 7,14,15    
+# Chambers ambient_air_SRX == 1,2,3 
+# Chambers purified_air== 4,8,9 
+# Chambers ozone_moderate== 5,10,11
+# Chambers ozone_contingency== 6,12,13 
+
+#Shape 19: Círculo sólido.
+#Shape 2: Triángulo apuntando hacia arriba (hueco).
+#Shape 4: Cruz.
+
+shape_chambers<- c("1"=20, "2"=2,"3"=4, #ambient_air_SRX
+                   "7"=20, "14"=2,"15"=4, #ambient_air_IE
+                   "4"=20, "8"=2,"9"=4, #purified_air
+                   "5"=20, "10"=2,"11"=4, #ozone_moderate
+                   "6"=20, "12"=2,"13"=4 #ozone_contingency
+                   )
+
+shape_triplicates<- c("1"=20, "2"=2,"3"=4)
+
+shape_ozone<- c("1"=20, "0"=17)
+
+shape_bud<- c("bud"=19, "growing"=4, "dead"=2)
+
+
+shape_GroupsMatrixP3y4<- c(
+                       "P3y4_groupA" =15, # cuadrado negro
+                       "P3y4_groupB" =1, # circulo vacio
+                       "P3y4_groupC" =2, # triangulo vacio punta arriba
+                       "P3y4_groupD"=6,  # triangulo vacio punta abajo
+                       "P3y4_groupE" =17, # triangulo negro punta arriba
+                       "P3y4_groupF" =8, # asterisco # estrella david 
+                       "No_sequenced" =11
+                       )
+
+
+```
+
+# CONCENTRATION DOSIS CHAMBERS
+
+## LOAD DATA concentrations_chambers_ALL
+```{r }
+
+concentrations_chambers_ALL<- read.csv("../outputs/concentrations_chambers_ALL.csv")
+
+concentrations_chambers_ALL$Treatment <- factor(concentrations_chambers_ALL$Treatment, levels = c("purified air",     "ambient air UNAM", "moderate" , "contingency"))
+
+# Cambiar el orden de los niveles manualmente
+
+levels(concentrations_chambers_ALL$Treatment)
+
+```
+
+## Clean data concentrations_chambers_ALL
+```{r }
+
+# Normalidad de datos
+
+ks.test(concentrations_chambers_ALL$ppb, "pnorm", mean(concentrations_chambers_ALL$ppb), sd(concentrations_chambers_ALL$ppb))
+hist(concentrations_chambers_ALL$ppb, main = "Histograma de Ozone Concentration", xlab = "ppb", breaks = 20)
+```
+
+```{r }
+# No son normales
+
+kruskal_result <- kruskal.test(ppb ~ Treatment, data = concentrations_chambers_ALL)
+print(kruskal_result)
+rm(kruskal_result)
+
+#Comparaciones por pares usando Wilcoxon si Kruskal-Wallis es significativo
+pairwise_result <- pairwise.wilcox.test(concentrations_chambers_ALL$ppb, concentrations_chambers_ALL$Treatment, p.adjust.method = "BH")
+print(pairwise_result)
+# Plot graph
+
+stat_box_data <- function(y) {
+  return(data.frame(
+    y = 1.05 * max(y),  
+    label = paste('n =', length(y))
+  ))
+}
+
+ggplot(concentrations_chambers_ALL, aes(x = Treatment, y = ppb, fill = Treatment)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) +
+  geom_jitter(position = position_jitter(0.4), size = 6, aes(color = Treatment), alpha = 0.75) +
+  stat_summary(fun.data = stat_box_data, geom = "text", size = 7, vjust = 0.5) + 
+  geom_signif(
+    comparisons = list(c("purified air", "ambient air UNAM"),
+                       c("purified air", "moderate"),
+                       c("purified air", "contingency"),
+                       c("ambient air UNAM", "moderate"),
+                       c("ambient air UNAM", "contingency"),
+                       c("moderate", "contingency")),  # Lista de comparaciones a realizar
+    map_signif_level = TRUE, 
+    textsize = 7, 
+    size = 1, 
+    y_position = c(250, 260, 270, 280, 290, 300)  # Ajusta las posiciones según el rango de tus datos
+  ) +
+  guides(fill = "none", color = "none", shape = "none") +
+  labs(x = "", y = "Ozone concentration (ppb)", fill = "Treatments") +
+  scale_fill_manual(values = colors_woSRX, labels = labels_woSRX) +
+  scale_color_manual(values = colors_woSRX) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
+    axis.text.y = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    legend.position = "bottom",
+    text = element_text(size = 25)
+  ) +
+  ggtitle("")
+```
+
+## Violin PLOT
+```{r }
+#Explicación: comparisons: Define las comparaciones entre los tratamientos que deseas realizar. En este ejemplo, se comparan todos los pares de tratamientos.
+#map_signif_level: Si está activado, se muestra el valor de significancia (por ejemplo, *, **, etc.).
+#y_position: Ajusta las posiciones verticales de las anotaciones para que no se solapen con los boxplots.
+#size y textsize: Controlan el tamaño de las líneas de la comparación y el tamaño del texto de los valores de significancia.
+#Este método te permitirá incluir automáticamente las comparaciones estadísticas en tu gráfico y mostrar visualmente las diferencias entre los tratamientos.
+
+
+# Realizar las comparaciones con Wilcoxon
+wilcox_results <- pairwise.wilcox.test(concentrations_chambers_ALL$ppb, concentrations_chambers_ALL$Treatment, p.adjust.method = "BH")
+
+rm(wilcox_results)
+
+# Realiza las comparaciones entre tratamientos (usando Kruskal-Wallis o Wilcoxon)
+# Este es un ejemplo para el test de Kruskal-Wallis entre diferentes tratamientos
+kruskal_test <- kruskal.test(ppb ~ Treatment, data = concentrations_chambers_ALL)
+rm
+
+# Luego, realiza las comparaciones post-hoc con Wilcoxon (si es necesario)
+pairwise_wilcox <- pairwise.wilcox.test(concentrations_chambers_ALL$ppb, concentrations_chambers_ALL$Treatment, p.adjust.method = "BH")
+
+# Define las comparaciones para geom_signif
+comparisons <- list(
+  c("moderate", "contingency"),
+    c("ambient air UNAM", "moderate"),
+  c("ambient air UNAM", "contingency"),
+  c("purified air", "contingency"),
+   c("purified air", "moderate")
+)
+
+
+# Ahora puedes agregar los valores p al gráfic
+
+ggplot(concentrations_chambers_ALL, aes(x = Treatment, y = ppb, fill = Treatment)) +
+  geom_violin(color = "black", alpha = 0.2) +  # Usamos geom_violin en lugar de geom_boxplot
+  geom_jitter(position = position_jitter(0.4), size = 2, aes(color = Treatment), alpha = 0.75) +
+  geom_signif(
+    comparisons = comparisons,  # Comparaciones entre tratamientos
+    map_signif_level = TRUE, 
+    textsize = 7, 
+    size = 1, 
+    y_position = c(210, 230, 250, 270, 290, 310)  # Ajusta según el rango de tus datos
+  ) +
+  stat_summary(fun.y = "mean", geom = "point", shape = 23, size = 4, color = "black", fill = "white") +  # Añadir medias
+  guides(fill = "none", color = "none", shape = "none") +
+  labs(x = "", y = "Ozone concentration (ppb)", fill = "Treatments") +
+  scale_fill_manual(values = colors_woSRX, labels = labels_woSRX) +
+  scale_color_manual(values = colors_woSRX) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
+    axis.text.y = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    legend.position = "bottom",
+    text = element_text(size = 25)
+  ) +
+  ggtitle("")
+
+# Export image
+ggsave("../outputs/concentr_chamb_violinplot.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# INDIVIDUALS OF CHAMBERS INFO 
+
+## Load data 
+```{r }
+
+## Load data 
+individual_chambers_ALL<- read.csv("../outputs/df_ALLmonths.csv")
+
+levels(individual_chambers_ALL$monthCollect)
+individual_chambers_ALL$monthCollect<- factor(individual_chambers_ALL$monthCollect, levels = c("March_2023", "June_2023", "October_2023", "January_2024" ))
+levels(individual_chambers_ALL$monthCollect)
+
+```
+
+
+## calculate deltas MARCH and JUNE
+
+```{r }
+# Remove NA in data 
+#Descartar datos que no tienen datos para Marzo o Junio por que murieron o por perdida de datos
+
+individual_chambers_ALL_na <- individual_chambers_ALL %>% filter(!chamber_ind %in% c("10_18", "3_25"))
+
+levels(individual_chambers_ALL_na$monthCollect)
+individual_chambers_ALL_na$monthCollect<- factor(individual_chambers_ALL_na$monthCollect, levels = c("March_2023", "June_2023", "October_2023", "January_2024" ))
+levels(individual_chambers_ALL_na$monthCollect)
+
+# Calcular las deltas de altura, diametro y length_last_node
+df_deltas_MJ <- individual_chambers_ALL_na %>%
+  filter(monthCollect %in% c("March_2023", "June_2023"))  %>%
+  arrange(treatment, chamber_ind, monthCollect) %>%  # order data 
+  mutate(delta_altura = height - lag(height)) %>% #Add new columns. Aparece en las filas de Junio
+  mutate(delta_diameter = diameter - lag(diameter)) 
+
+# Crear un nuevo DataFrame con deltas Junio
+df_JunDeltas <- df_deltas_MJ %>%
+  filter(monthCollect == "June_2023")
+
+# Convert to factor
+df_JunDeltas$treatment <- as.factor(df_JunDeltas$treatment)
+df_JunDeltas$monthCollect <- as.factor(df_JunDeltas$monthCollect)
+df_JunDeltas$survivors <- as.factor(df_JunDeltas$survivors)
+df_JunDeltas$bud_condition <- as.factor(df_JunDeltas$bud_condition)
+df_JunDeltas$other_plants_growing <- as.factor(df_JunDeltas$other_plants_growing)
+df_JunDeltas$growth_type <- as.factor(df_JunDeltas$growth_type)
+df_JunDeltas$chamber_number<- as.factor(df_JunDeltas$chamber_number)
+df_JunDeltas$tree_number<- as.factor(df_JunDeltas$tree_number)
+df_JunDeltas$dosis<- as.factor(df_JunDeltas$dosis)
+df_JunDeltas$triplicate <- as.factor(df_JunDeltas$triplicate)
+df_JunDeltas$chamber_ind <- as.factor(df_JunDeltas$chamber_ind)
+
+
+# Cambiar el orden de los niveles
+levels(df_JunDeltas$treatment)
+df_JunDeltas$treatment <- factor(df_JunDeltas$treatment, levels = c("ambient_air_SRX","purified_air", "ambient_air_IE","ozone_moderate","ozone_contingency"))
+levels(df_JunDeltas$treatment)
+
+
+levels(df_JunDeltas$monthCollect)
+df_JunDeltas$monthCollect<- factor(df_JunDeltas$monthCollect, levels = c("March_2023", "June_2023", "October_2023", "January_2024" ))
+levels(df_JunDeltas$monthCollect)
+
+# Remove datas extras
+rm(df_deltas_MJ)
+```
+
+## data characteristics
+```{r }
+# Histograma
+hist(df_JunDeltas$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+# Prueba de Shapiro-Wilk
+shapiro_test <- shapiro.test(df_JunDeltas$delta_altura)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Borrarx
+rm(shapiro_test)
+```
+
+# FIG. 3 Delta height March and June ALL. Height_trees_per_chamber-treatment.
+
+## plot
+
+```{r }
+my_comparisons_height <- list(c("purified_air", "ozone_contingency"))
+
+kruskal_test <- kruskal.test(delta_altura ~ treatment, data = df_JunDeltas)
+p_value <- kruskal_test$p.value
+# Dado que el p-value (0.03215) es menor que el nivel de significancia comúnmente utilizado (0.05), puedes rechazar la hipótesis nula. Esto sugiere que hay diferencias significativas en las medianas de la variable delta_altura entre al menos dos de los tratamientos.
+
+library(FSA)
+
+# Realizar la prueba de Dunn
+dunn_test <- dunnTest(na.omit(delta_altura) ~ treatment, data = df_JunDeltas, method = "bh") # Método de corrección de Benjamini-Hochberg
+print(dunn_test)
+
+# Puedes concluir que hay diferencias significativas entre ozone_contingency y purified_air, mientras que otras comparaciones no muestran diferencias significativas.
+
+#height
+ggplot(df_JunDeltas, aes(x = treatment, y = delta_altura, fill = treatment)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2)+
+  geom_jitter(position = position_jitter(0.4), size = 6, aes(color = treatment, shape = triplicate), alpha = 0.75 ) +  # Agrega puntos
+  scale_fill_manual(values = colors_ALL, labels = labels_ALL)+
+  scale_color_manual(values = colors_ALL)+
+  scale_shape_manual(values = shape_triplicates, labels = c("1", "2", "3")) +  # Define diferentes formas
+  scale_x_discrete(labels = labels_ALL) +
+  guides( fill = "none", color = "none", shape = guide_legend(title = "Chamber Number\n per treatment")) +
+  labs(x = "", y = paste0("Δ height (cm)"),fill = "") +
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 25),
+    plot.title = element_text(lineheight = 1.1)
+  ) +
+  ggtitle("") +
+  coord_flip()
+
+# Export image
+ggsave("../outputs/height_trees_per_chamber-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# FIG: 4: height_trees_per_ozone-damage-treatment
+
+##plot
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+# Filtrando datos para asintomáticos
+df_asymptomatic <- df_JunDeltas[df_JunDeltas$ozone_damage == "0", ]
+
+table(df_asymptomatic$treatment)
+df_asymptomatic$treatment <- factor(df_asymptomatic$treatment)
+
+# ANOVA para asintomáticos
+anova_asymptomatic <- aov(delta_altura ~ treatment, data = df_asymptomatic)
+summary(anova_asymptomatic)
+
+# Filtrando datos para sintomáticos
+df_symptomatic <- df_JunDeltas[df_JunDeltas$ozone_damage == "1", ]
+
+table(df_symptomatic$treatment)
+df_symptomatic$treatment <- factor(df_symptomatic$treatment)
+
+# ANOVA para sintomáticos
+anova_symptomatic <- aov(delta_altura ~ treatment, data = df_symptomatic)
+summary(anova_symptomatic)
+
+ggplot(df_JunDeltas, aes(x = treatment, y = delta_altura, shape = as.factor(ozone_damage), # Mapear formas a ozone_damage
+  fill = treatment,               # Mapear colores de relleno a treatment
+  color = treatment # Mapear colores de borde a ozone_damage
+)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) + 
+  geom_jitter(position = position_jitterdodge(), size = 6) +
+  labs(title = "",
+       x = "",
+       y = "Δ height (cm)") +
+  scale_x_discrete(labels = labels_ALL)+
+  scale_fill_manual(values = colors_ALL)+
+  scale_color_manual(values = colors_ALL)+
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic"))+
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.9, 
+    size = 9)+
+  guides( fill = "none",shape = guide_legend(title = "Condition after\n treatment"), color = "none")+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  )
+
+# Export image
+ggsave("../outputs/height_trees_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+
+```
+
+# FIG. 5: chlorophyll_trees_per_ozone-damage-treatment
+
+##Load data
+```{r }
+Chloro_data<- read.csv("../outputs/Chloro_dataABTotal.csv")
+
+
+# Filtrar los datos para eliminar ciertos tratamientos
+datos_filtrados_Chloro <- Chloro_data %>%
+  filter(!TREATMENT %in% c("VACIO", "BLANCO")) %>%
+  filter(!DAY %in% c("DIA01"))
+
+levels(factor(datos_filtrados_Chloro$TREATMENT))
+
+datos_filtrados_Chloro$TREATMENT <- factor(datos_filtrados_Chloro$TREATMENT, 
+                     levels = c("AX", "AE", "AP", "CC", "CA"))
+
+levels(factor(datos_filtrados_Chloro$TREATMENT))
+
+datos_filtrados_Chloro <- datos_filtrados_Chloro %>%
+  mutate(chamber_ind = paste(chamber_number, tree_number, sep = "_"))
+
+# Calcular el promedio de clorofila por individuo
+total_chloro <- datos_filtrados_Chloro %>%
+  group_by(chamber_ind) %>% # Agrupar por ID y otras columnas que desees mantener
+  summarise(Promedio_Clorofila = mean(Total, na.rm = T)) 
+
+df_merge <- left_join(total_chloro,df_JunDeltas, by = "chamber_ind")
+
+datos_filtrados_Chloro_2 <- datos_filtrados_Chloro %>%
+  mutate(chamber_ind = paste(chamber_number, tree_number, sep = "_"))
+
+# Calcular el promedio de clorofila por individuo
+total_chloro <- datos_filtrados_Chloro_2 %>%
+  group_by(chamber_ind) %>% # Agrupar por ID y otras columnas que desees mantener
+  summarise(Promedio_Clorofila = mean(Total, na.rm = T)) 
+
+df_mergeChloro <- left_join(total_chloro,df_JunDeltas, by = "chamber_ind")
+
+df_mergeChloro <- df_mergeChloro %>% filter(!chamber_ind %in% c("10_18", "3_25"))
+
+
+```
+
+## plot
+```{r }
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+ggplot(df_mergeChloro, aes(x = treatment, y = Promedio_Clorofila, shape = as.factor(ozone_damage), # Mapear formas a ozone_damage
+  fill = treatment,               # Mapear colores de relleno a treatment
+  color = treatment # Mapear colores de borde a ozone_damage
+)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) + 
+  geom_jitter(position = position_jitterdodge(), size = 6) +
+  labs(title = "",
+       x = "",
+       y = "Total Chlorophyll (mg/g)") +
+  guides( fill = "none",shape = guide_legend(title = "Condition after\n treatment"), color = "none")+
+  scale_x_discrete(labels = labels_ALL)+
+  scale_fill_manual(values = colors_ALL)+
+  scale_color_manual(values = colors_ALL)+
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic"))+
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.9,
+    size =9)+  
+  ggtitle("") +
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 25),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+# Export image
+ggsave("../outputs/chlorophyll_trees_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+
+```{r }
+
+# Filtrando datos para asintomáticos
+df_asymptomatic <- df_mergeChloro[df_mergeChloro$ozone_damage == "0", ]
+
+table(df_asymptomatic$treatment)
+df_asymptomatic$treatment <- factor(df_asymptomatic$treatment)
+
+# ANOVA para asintomáticos
+anova_asymptomatic <- aov(Promedio_Clorofila ~ treatment, data = df_asymptomatic)
+summary(anova_asymptomatic)
+# Prueba de Kruskal-Wallis para asintomáticos
+kruskal_asymptomatic <- kruskal.test(Promedio_Clorofila ~ treatment, data = df_asymptomatic)
+kruskal_asymptomatic
+
+# Test de Tukey
+tukey_asymptomatic <- TukeyHSD(anova_asymptomatic)
+
+# Ver resultados del test de Tukey
+summary(tukey_asymptomatic)
+
+
+# Filtrando datos para sintomáticos
+df_symptomatic <- df_mergeChloro[df_mergeChloro$ozone_damage == "1", ]
+
+table(df_symptomatic$treatment)
+df_symptomatic$treatment <- factor(df_symptomatic$treatment)
+
+
+# ANOVA para sintomáticos
+anova_symptomatic <- aov(Promedio_Clorofila ~ treatment, data = df_symptomatic)
+summary(anova_symptomatic)
+
+```
+
+# FIG. 6: ozone_damage_delta-height_association descartando a arboles del bosque
+
+```{r }
+
+df_merge_asociat <- df_mergeChloro %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+# Ajustar un modelo de regresión lineal
+modelo_lm <- lm(delta_altura ~ Promedio_Clorofila * factor(ozone_damage), data = df_merge_asociat)
+
+# Ver resumen del modelo (estadísticos del modelo)
+summary(modelo_lm)
+
+# Extraer los estadísticos del modelo
+summary_modelo <- summary(modelo_lm)
+r_squared <- summary_modelo$r.squared  # R²
+r_squared_adj <- summary_modelo$adj.r.squared  # R² ajustado
+f_statistic <- summary_modelo$fstatistic[1]  # Estadístico F
+f_p_value <- summary_modelo$fstatistic[3]  # p-valor del estadístico F
+
+# Coeficientes y p-valores
+coeficientes <- summary_modelo$coefficients[, 1]  # Coeficientes
+p_values <- summary_modelo$coefficients[, 4]  # Valores p
+
+library(ggpmisc)
+
+# Crear el gráfico
+ggplot(df_merge_asociat, aes(
+  x = Promedio_Clorofila, 
+  y = delta_altura, 
+  color = as.factor(ozone_damage),  
+  shape = as.factor(ozone_damage),  
+  fill = as.factor(ozone_damage)
+)) +
+  geom_point(size = 6, alpha = 0.7) +  # Puntos para los datos individuales
+  geom_smooth(method = "lm", se = TRUE, aes(fill = as.factor(ozone_damage)), alpha = 0.2, size = 2) +
+  stat_poly_eq(
+    aes(label = ..eq.label..), 
+    formula = y ~ x, 
+    parse = TRUE
+  ) +   # Añade la ecuación y R² automáticamente
+  labs(
+    title = "",
+    x = "Total Chlorophyll (mg/g)",
+    y = "Δ height (cm)",
+    color = "Fenotipo",
+    shape = "Condition after\n treatment"
+  ) +
+  guides(  
+    color = "none", 
+    fill = "none",
+    shape = guide_legend(title = "Condition after\n treatment")
+  ) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red")) +
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic")) +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "pink")) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
+    axis.text.y = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 25),
+    plot.title = element_text(lineheight = 1.1)
+  ) +
+  # Agregar el valor de R² en el gráfico
+  annotate("text", x = max(df_merge_asociat$Promedio_Clorofila), y = max(df_merge_asociat$delta_altura), 
+           label = paste("R² =", round(r_squared, 3)), 
+           hjust = 1, vjust = 1, size = 6, color = "black")
+
+# Export image
+ggsave("../outputs/ozone_damage_delta-height_association_with out forest.png", width = 16, height = 10, dpi = 600)
+
+```
+
+```{r }
+
+# Add column about damage ozone condition and dead status
+df_mergeChloro$suv_damozo <- paste(df_mergeChloro$survivors, df_mergeChloro$ozone_damage, sep = "_")
+
+write.csv(df_mergeChloro, "../outputs/df_mergeChloro_suvdamozo.csv", row.names = FALSE)
+
+
+# Add column about damage ozone condition and dead status
+individual_chambers_ALL_na$suv_damozo <- paste(individual_chambers_ALL_na$survivors, individual_chambers_ALL_na$ozone_damage, sep = "_")
+
+# Add column about damage ozone condition and dead status
+individual_chambers_ALL$suv_damozo <- paste(individual_chambers_ALL$survivors, individual_chambers_ALL$ozone_damage, sep = "_")
+
+# Add column about damage ozone condition and dead status
+df_JunDeltas$suv_damozo <- paste(df_JunDeltas$survivors, df_JunDeltas$ozone_damage, sep = "_")
+
+
+
+```
+
+### Contingency
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- individual_chambers_ALL %>%
+    filter(treatment == c("ozone_contingency"))
+
+plot1<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Contingency",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none") +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+plot1
+
+```
+
+### Moderate
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- individual_chambers_ALL %>%
+    filter(treatment == c("ozone_moderate"))
+
+plot2<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+geom_point(size = 3, alpha = 0.7, shape=15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Moderate",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  )
+
+  
+plot2
+```
+
+### ambient_air_IE
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- individual_chambers_ALL %>%
+    filter(treatment == c("ambient_air_IE"))
+
+plot3<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Ambient air UNAM",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+theme_bw() +
+   theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+plot3
+
+```
+
+### purified_air
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- individual_chambers_ALL %>%
+    filter(treatment == c("purified_air"))
+
+plot4<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Purified air",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at UNAM", "January_2024" = "Three months after\n to return to the forest"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, size = 15,margin = margin(t = 10)),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+plot4
+```
+
+### ambient_air_SRX
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- individual_chambers_ALL %>%
+    filter(treatment == c("ambient_air_SRX"))
+
+plot5<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Nursery",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "March 2023", "June_2023" = "June 2023", "October_2023" = "October 2023", "January_2024" = "January 2024"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, size = 15,margin = margin(t = 10)),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+plot5
+
+```
+
+
+### legend
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- individual_chambers_ALL_na %>%
+    filter(treatment == c("purified_air"))
+
+plot6<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 5, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Purified air",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+  theme_bw()
+
+plot6
+
+```
+
+
+```{r }
+library(gridExtra)
+library(grid)
+library(gtable)
+library(cowplot)
+
+# Agregar una leyenda común
+legend <- get_legend(plot6 + theme(legend.position = "top", 
+          legend.title = element_text(size = 30),
+          legend.text = element_text(size = 30),
+          plot.margin = unit(c(1, 1, 1, 1), "cm")))  
+
+
+
+grid_plot <- grid.arrange(
+  plot1 + theme(legend.position = "none"),
+  plot2,
+  plot3,
+  plot4,
+  plot5, # Leyenda aumentada
+  ncol = 1
+)
+ggsave("../outputs/treatments_survives.png", plot = grid_plot, width = 10, height = 20, dpi = 300)
+```
+
+
+```{r }
+
+df_summary <- individual_chambers_ALL_na %>%
+  group_by(monthCollect, treatment, suv_damozo) %>%      # Agrupamos por mes, tratamiento y condición
+  summarise(count = n()) %>%                               # Contamos el número de observaciones por grupo
+  ungroup() %>%
+  group_by(monthCollect, treatment) %>%                     # Agrupamos por mes y tratamiento para calcular la proporción
+  mutate(total = sum(count),                               # Calculamos el total de individuos por mes y tratamiento
+         proportion =  round((count / total) * 100, 1))                   # Calculamos la proporción de cada condición
+
+# Ver los resultados
+print(df_summary)
+
+write.csv(df_summary, "../outputs/df_summary_proportionSURVIVE.csv", row.names = FALSE)
+
+```
+
+```{r }
+# Crear la gráfica de barras
+bar_suvivors<-ggplot(df_summary, aes(x = treatment, y = proportion, fill = suv_damozo)) +
+  # Apilar las barras
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  
+  # Cambiar las etiquetas de las facetas
+  facet_wrap(~ monthCollect, scales = "free_x", 
+             labeller = labeller(monthCollect = c(
+               "March_2023" = "Before Fumigation", 
+               "June_2023" = "After Fumigation", 
+               "October_2023" = "Three Months After\nTreatment at University", 
+               "January_2024" = "Six Months After\nTreatment at Forest"
+             ))) +
+  
+  # Etiquetas de los ejes y la leyenda
+  labs(
+    x = "Treatment",
+    y = "Proportion of Individuals (%)",
+    fill = "Survival Status"
+  ) +
+  
+  # Definir etiquetas personalizadas para las barras
+  scale_x_discrete(labels = labels_ALL) +
+  
+  # Cambiar el color de las barras y la leyenda de la condición
+  scale_fill_manual(
+    values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey"),
+    labels = c(
+      "survive_0" = "Survived Asymptomatic", 
+      "survive_1" = "Survived Symptomatic", 
+      "dead_NA" = "Dead"
+    )
+  ) +
+  
+  # Estilo del gráfico
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Rotar el texto del eje X
+    axis.text.y = element_text(size = 25),  # Ajustar tamaño del texto en el eje Y
+    text = element_text(size = 25),
+    legend.position = "bottom",  # Posicionar la leyenda en la parte inferior
+    legend.title = element_text(size = 25),  # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25)   # Tamaño del texto de la leyenda
+  )
+
+bar_suvivors
+
+ggsave("../outputs/treatments_survives_bars.png", plot = bar_suvivors, width = 16, height = 16, dpi = 300)
+
+```
+
+
+```{r }
+# Realizar ANOVA para comparar las proporciones entre los diferentes niveles de 'ozone_damage' en cada tratamiento y mes
+anova_result <- aov(proportion ~ suv_damozo + treatment + monthCollect, data = df_summary)
+
+# Ver el resumen de ANOVA
+summary(anova_result)
+
+tukey_result <- TukeyHSD(anova_result)
+summary(tukey_result)
+```
+
+
+
+
+# Plot modelo 
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDeltas_2 <- df_JunDeltas %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+
+
+ggplot(df_JunDeltas_2, aes(x = treatment, y = delta_altura, shape = as.factor(ozone_damage), # Mapear formas a ozone_damage
+  fill = treatment,               # Mapear colores de relleno a treatment
+  color = treatment # Mapear colores de borde a ozone_damage
+)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) + 
+  geom_jitter(position = position_jitterdodge(), size = 6) +
+  labs(title = "",
+       x = "",
+       y = "Δ height (cm)") +
+  scale_x_discrete(labels = labels_woSRX)+
+  scale_fill_manual(values = colors_woSRX)+
+  scale_color_manual(values = colors_woSRX)+
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic"))+
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.9, 
+    size = 9)+
+  guides( fill = "none",shape = guide_legend(title = "Condition after\n treatment"), color = "none")+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  )
+
+# Export image
+ggsave("../outputs/model_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+```

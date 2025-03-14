@@ -1,0 +1,2338 @@
+---
+title: "Ozono_concentration_chambers"
+author: "Vero"
+date: "28/10/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#LOAD LIBRARIES
+```{r}
+#Load libraries
+library(openxlsx)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(car)
+library(MASS)
+```
+
+# INFO
+```{r }
+
+my_comparisons <- list(c("ambient_air_SRX", "ambient_air_IE"), c("ambient_air_SRX", "purified_air"), c("ambient_air_SRX", "ozone_moderate"), c("ambient_air_SRX", "ozone_contingency"), c("ambient_air_IE", "purified_air"), c("ambient_air_IE", "ozone_moderate"), c("ambient_air_IE", "ozone_contingency"), c("purified_air", "ozone_moderate"),c("purified_air", "ozone_contingency"),c("ozone_moderate", "ozone_contingency"))
+
+labels_ALL <- c( "nursery","purified air","ambient air UNAM", 
+  "moderate","contingency"
+)
+
+
+labels_woSRX <- c(
+  purified_air = "purified air",
+  ambient_air_IE = "ambient air UNAM",
+  ozone_moderate = "moderate",
+  ozone_contingency = "contingency"
+  
+)
+
+#d3453a: Un rojo intenso.
+#bcb635: Un amarillo verdoso, similar al color mostaza.
+#48b1da: Un azul claro o azul celeste.
+#5cc051: Un verde brillante.
+#697329: Un verde oliva o un verde oscuro.
+colors_ALL <- c("#697329", "#48b1da", "#5cc051", "#bcb635", "#d3453a" )
+
+colors_woSRX <- c("#48b1da", "#5cc051",  "#bcb635", "#d3453a" )
+
+colors_ozoned <- c( "#5cc051",  "#bcb635", "#d3453a" )
+
+colors_relatedness <- c("#688ccd",
+"#69b44c","#7962cb","#c4aa42","#c163ba","#4bb193","#d04c41","#6e7f38","#c75980","#c27945")
+
+#Number of chambers and treatments
+# Chambers ambient_air_IE == 7,14,15    
+# Chambers ambient_air_SRX == 1,2,3 
+# Chambers purified_air== 4,8,9 
+# Chambers ozone_moderate== 5,10,11
+# Chambers ozone_contingency== 6,12,13 
+
+#Shape 19: Círculo sólido.
+#Shape 2: Triángulo apuntando hacia arriba (hueco).
+#Shape 4: Cruz.
+
+shape_chambers<- c("1"=20, "2"=2,"3"=4, #ambient_air_SRX
+                   "7"=20, "14"=2,"15"=4, #ambient_air_IE
+                   "4"=20, "8"=2,"9"=4, #purified_air
+                   "5"=20, "10"=2,"11"=4, #ozone_moderate
+                   "6"=20, "12"=2,"13"=4 #ozone_contingency
+                   )
+
+shape_triplicates<- c("1"=20, "2"=2,"3"=4)
+
+shape_ozone<- c("1"=20, "0"=17)
+
+shape_bud<- c("bud"=19, "growing"=4, "dead"=2)
+
+shape_GroupsMatrix<- c("P3_groupA" =15, # cuadrado negro
+                       "P3_groupB" =16, # circulo negro
+                       "P3_groupC" =17, # triangulo negro punta arriba
+                       "P3_groupD"=8, # asterisco
+                       "P3_groupE" =3, # simbolo mas
+                       "P4_groupA" =0, #cuadrado vacio
+                       "P4_groupB" =1, # circulo vacio
+                       "P4_groupC" =2, # triangulo vacio punta arriba
+                       "P4_groupD"=6,  # triangulo vacio punta abajo
+                       "P4_groupE" =7, # cuadrado con cruz adentro
+                       "No_sequenced" =10, # circulo con simbolo de mas
+                       "Dosis_purified_air"= 11) # estrella david 
+
+
+shape_GroupsMatrixMix<- c(
+                       "P4_groupA" =15, # cuadrado negro
+                       "P4_groupB" =1, # circulo vacio
+                       "P4_groupC" =2, # triangulo vacio punta arriba
+                       "P4_groupD"=6,  # triangulo vacio punta abajo
+                       "P4_groupE" =17, # triangulo negro punta arriba
+                       "P4DyP3C" =8 # asterisco # estrella david 
+                       )
+
+shape_GroupsMatrixP3y4<- c(
+                       "P3y4_groupA" =15, # cuadrado negro
+                       "P3y4_groupB" =1, # circulo vacio
+                       "P3y4_groupC" =2, # triangulo vacio punta arriba
+                       "P3y4_groupD"=6,  # triangulo vacio punta abajo
+                       "P3y4_groupE" =17, # triangulo negro punta arriba
+                       "P3y4_groupF" =8, # asterisco # estrella david 
+                       "No_sequenced" =11
+                       )
+
+
+```
+
+```{r }
+
+## Load data 
+datos_1_abr_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/1_abr_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_1_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/1_mar_23_ozono_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_2_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/2_mar_23_ozono_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_4_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/4_mar_23_ozono_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_5_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/5_mar_23_ozono_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_6_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/6_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_11_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/11_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_12_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/12_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_13_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/13_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_14_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/14_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_15_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/15_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_15_abr_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/15_abr_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_16_abr_23<- read.xlsx("../metadata/Ozone_concentrations_measures/16_abr_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_18_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/18_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_20_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/20_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_25_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/25_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+datos_26_mar_23 <- read.xlsx("../metadata/Ozone_concentrations_measures/26_mar_23_allday.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+
+
+# Crear una lista de dataframes
+lista_de_dataframes <- list(datos_1_abr_23,
+datos_1_mar_23,
+datos_2_mar_23,
+datos_4_mar_23,
+datos_5_mar_23,
+datos_6_mar_23,
+datos_11_mar_23, 
+datos_12_mar_23,
+datos_13_mar_23,
+datos_14_mar_23,
+datos_15_abr_23,
+datos_15_mar_23,
+datos_16_abr_23,
+datos_18_mar_23,
+datos_20_mar_23,
+datos_25_mar_23,
+datos_26_mar_23)
+
+
+# Unir todos los dataframes en uno solo
+resultado <- do.call(rbind, lista_de_dataframes)
+
+colnames(resultado)<- c("Port", "Date", "Time", "Concentration","Temp", "RH","Treatment", "Hour_exposition", "status")
+
+
+```
+
+
+```{r }
+
+resultado<- resultado %>%
+  filter(as.factor(Treatment) != "transition")
+
+## Convert ppm to ppb
+
+# Add column
+colnames(resultado)
+resultado$ppb<-resultado$Concentration*1000
+
+#levels(resultado$Treatment)<-levels(as.factor(resultado$Treatment))
+resultado$Treatment<-as.factor(resultado$Treatment)
+resultado$Treatment <- factor(resultado$Treatment,  levels= c(  "purified",  "IE-envirom", "chronic", "acute"))
+levels(resultado$Treatment)<- c(  "purified air",  "ambient air UNAM", "moderate", "contingency")
+
+# Normalidad de datos
+
+ks.test(resultado$ppb, "pnorm", mean(resultado$ppb), sd(resultado$ppb))
+hist(resultado$ppb, main = "Histograma de Ozone Concentration", xlab = "ppb", breaks = 20)
+
+# No son normales
+
+kruskal_result <- kruskal.test(ppb ~ Treatment, data = resultado)
+print(kruskal_result)
+
+#Comparaciones por pares usando Wilcoxon si Kruskal-Wallis es significativo
+pairwise_result <- pairwise.wilcox.test(resultado$ppb, resultado$Treatment, p.adjust.method = "BH")
+print(pairwise_result)
+# Plot graph
+
+stat_box_data <- function(y) {
+  return(data.frame(
+    y = 1.05 * max(y),  
+    label = paste('n =', length(y))
+  ))
+}
+
+ggplot(resultado, aes(x = Treatment, y = ppb, fill = Treatment)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) +
+  geom_jitter(position = position_jitter(0.4), size = 6, aes(color = Treatment), alpha = 0.75) +
+  stat_summary(fun.data = stat_box_data, geom = "text", size = 7, vjust = 0.5) + 
+  geom_signif(
+    comparisons = list(c("purified air", "ambient air UNAM"),
+                       c("purified air", "moderate"),
+                       c("purified air", "contingency"),
+                       c("ambient air UNAM", "moderate"),
+                       c("ambient air UNAM", "contingency"),
+                       c("moderate", "contingency")),  # Lista de comparaciones a realizar
+    map_signif_level = TRUE, 
+    textsize = 7, 
+    size = 1, 
+    y_position = c(250, 260, 270, 280, 290, 300)  # Ajusta las posiciones según el rango de tus datos
+  ) +
+  guides(fill = "none", color = "none", shape = "none") +
+  labs(x = "", y = "Ozone concentration (ppb)", fill = "Treatments") +
+  scale_fill_manual(values = colors_woSRX, labels = labels_woSRX) +
+  scale_color_manual(values = colors_woSRX) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
+    axis.text.y = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    legend.position = "bottom",
+    text = element_text(size = 25)
+  ) +
+  ggtitle("")
+
+#Explicación: comparisons: Define las comparaciones entre los tratamientos que deseas realizar. En este ejemplo, se comparan todos los pares de tratamientos.
+#map_signif_level: Si está activado, se muestra el valor de significancia (por ejemplo, *, **, etc.).
+#y_position: Ajusta las posiciones verticales de las anotaciones para que no se solapen con los boxplots.
+#size y textsize: Controlan el tamaño de las líneas de la comparación y el tamaño del texto de los valores de significancia.
+#Este método te permitirá incluir automáticamente las comparaciones estadísticas en tu gráfico y mostrar visualmente las diferencias entre los tratamientos.
+
+
+# Realizar las comparaciones con Wilcoxon
+library(dplyr)
+wilcox_results <- pairwise.wilcox.test(resultado$ppb, resultado$Treatment, p.adjust.method = "BH")
+
+# Realiza las comparaciones entre tratamientos (usando Kruskal-Wallis o Wilcoxon)
+# Este es un ejemplo para el test de Kruskal-Wallis entre diferentes tratamientos
+kruskal_test <- kruskal.test(ppb ~ Treatment, data = resultado)
+
+# Luego, realiza las comparaciones post-hoc con Wilcoxon (si es necesario)
+pairwise_wilcox <- pairwise.wilcox.test(resultado$ppb, resultado$Treatment, p.adjust.method = "BH")
+
+# Define las comparaciones para geom_signif
+comparisons <- list(
+  c("moderate", "contingency"),
+    c("ambient air UNAM", "moderate"),
+  c("ambient air UNAM", "contingency"),
+  c("purified air", "contingency"),
+   c("purified air", "moderate")
+)
+
+
+# Ahora puedes agregar los valores p al gráfic
+
+ggplot(resultado, aes(x = Treatment, y = ppb, fill = Treatment)) +
+  geom_violin(color = "black", alpha = 0.2) +  # Usamos geom_violin en lugar de geom_boxplot
+  geom_jitter(position = position_jitter(0.4), size = 2, aes(color = Treatment), alpha = 0.75) +
+  geom_signif(
+    comparisons = comparisons,  # Comparaciones entre tratamientos
+    map_signif_level = TRUE, 
+    textsize = 7, 
+    size = 1, 
+    y_position = c(210, 230, 250, 270, 290, 310)  # Ajusta según el rango de tus datos
+  ) +
+  stat_summary(fun.y = "mean", geom = "point", shape = 23, size = 4, color = "black", fill = "white") +  # Añadir medias
+  guides(fill = "none", color = "none", shape = "none") +
+  labs(x = "", y = "Ozone concentration (ppb)", fill = "Treatments") +
+  scale_fill_manual(values = colors_woSRX, labels = labels_woSRX) +
+  scale_color_manual(values = colors_woSRX) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
+    axis.text.y = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    legend.position = "bottom",
+    text = element_text(size = 25)
+  ) +
+  ggtitle("")
+
+# Export image
+ggsave("../outputs/concentr_chamb.png", width = 16, height = 10, dpi = 600)
+
+
+
+```
+
+```{r }
+## Export image
+
+ggsave("../outputs/Concentrations_Chambers_English.png", plot= concentr_chamb_Fig,
+       width = 16, height = 12,
+       dpi = 600)
+
+```
+
+#LOAD DATA
+## Load data March
+```{r }
+## Load data 
+Chambers_March <- read.xlsx("../metadata/Chambers_mesures_All/March.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+```
+
+## Load data June
+```{r }
+Chambers_June <- read.xlsx("../metadata/Chambers_mesures_All/June.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+```
+
+## Load data October
+```{r }
+Chambers_October <- read.xlsx("../metadata/Chambers_mesures_All/October.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+```
+
+## Load data January
+```{r }
+Chambers_January <- read.xlsx("../metadata/Chambers_mesures_All/January.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+```
+
+#JOIN data
+```{r }
+# Crear un nuevo dataframe con las columnas seleccionadas
+df_unido <- dplyr::bind_rows(Chambers_March, Chambers_June, Chambers_October, Chambers_January)
+
+str(df_unido)
+
+#Add column
+
+df_unido$dosis <- ifelse(df_unido$treatment == "ambient_air_IE", "without_ozone",
+                   ifelse(df_unido$treatment == "purified_air", "without_ozone",
+                   ifelse(df_unido$treatment == "ambient_air_SRX", "forest",
+                          ifelse(df_unido$treatment == "ozone_moderate", "with_ozone",
+                          ifelse(df_unido$treatment == "ozone_contingency", "with_ozone", NA)))))
+
+# Remove data frames per month
+
+rm(Chambers_January, Chambers_March, Chambers_June, Chambers_October)
+
+# Convert to factor
+df_unido$treatment <- as.factor(df_unido$treatment)
+df_unido$monthCollect <- as.factor(df_unido$monthCollect)
+df_unido$survivors <- as.factor(df_unido$survivors)
+df_unido$bud_condition <- as.factor(df_unido$bud_condition)
+df_unido$other_plants_growing <- as.factor(df_unido$other_plants_growing)
+df_unido$growth_type <- as.factor(df_unido$growth_type)
+df_unido$chamber_number<- as.factor(df_unido$chamber_number)
+df_unido$tree_number<- as.factor(df_unido$tree_number)
+df_unido$dosis<- as.factor(df_unido$dosis)
+df_unido$triplicate <- as.factor(df_unido$triplicate)
+
+# Cambiar el orden de los niveles
+levels(df_unido$treatment)
+df_unido$treatment <- factor(df_unido$treatment, levels = c("ambient_air_SRX","purified_air", "ambient_air_IE","ozone_moderate","ozone_contingency"))
+
+levels(df_unido$monthCollect)
+df_unido$monthCollect<- factor(df_unido$monthCollect, levels = c("March_2023", "June_2023", "October_2023", "January_2024" ))
+
+#Check data
+str(df_unido)
+
+df_unido <- df_unido %>%
+  mutate(chamber_ind = paste(chamber_number, tree_number, sep = "_"))
+
+
+#Export data
+write.csv(df_unido, "../outputs/df_ALLmonths.csv", row.names = FALSE)
+```
+
+
+#CALCULATE DELTAS MARCH and JUNE
+
+```{r }
+# Remove NA in data 
+#Descartar datos que no tienen datos para Marzo o Junio por que murieron o por perdida de datos
+
+df_unido_na <- df_unido %>% filter(!chamber_ind %in% c("10_18", "3_25"))
+
+# Calcular las deltas de altura, diametro y length_last_node
+df_deltas_MJ <- df_unido_na %>%
+  filter(monthCollect %in% c("March_2023", "June_2023"))  %>%
+  arrange(treatment, chamber_ind, monthCollect) %>%  # order data 
+  mutate(delta_altura = height - lag(height)) %>% #Add new columns. Aparece en las filas de Junio
+  mutate(delta_diameter = diameter - lag(diameter)) 
+
+# Crear un nuevo DataFrame con deltas Junio
+df_JunDel <- df_deltas_MJ %>%
+  filter(monthCollect == "June_2023")
+
+# Remove datas extras
+rm(df_deltas_MJ)
+```
+
+# DATA CHARACTERISTICS
+```{r }
+# Histograma
+hist(df_JunDel$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+# Prueba de Shapiro-Wilk
+shapiro_test <- shapiro.test(df_JunDel$delta_altura)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Borrarx
+rm(shapiro_test)
+```
+
+# FIG. 3 Delta height March and June ALL. Height_trees_per_chamber-treatment.
+
+## plot
+
+```{r }
+my_comparisons_height <- list(c("purified_air", "ozone_contingency"))
+
+kruskal_test <- kruskal.test(delta_altura ~ treatment, data = df_JunDel)
+p_value <- kruskal_test$p.value
+# Dado que el p-value (0.03215) es menor que el nivel de significancia comúnmente utilizado (0.05), puedes rechazar la hipótesis nula. Esto sugiere que hay diferencias significativas en las medianas de la variable delta_altura entre al menos dos de los tratamientos.
+
+library(FSA)
+
+# Realizar la prueba de Dunn
+dunn_test <- dunnTest(na.omit(delta_altura) ~ treatment, data = df_JunDel, method = "bh") # Método de corrección de Benjamini-Hochberg
+print(dunn_test)
+
+# Puedes concluir que hay diferencias significativas entre ozone_contingency y purified_air, mientras que otras comparaciones no muestran diferencias significativas.
+
+#height
+ggplot(df_JunDel, aes(x = treatment, y = delta_altura, fill = treatment)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2)+
+  geom_jitter(position = position_jitter(0.4), size = 6, aes(color = treatment, shape = triplicate), alpha = 0.75 ) +  # Agrega puntos
+  scale_fill_manual(values = colors_ALL, labels = labels_ALL)+
+  scale_color_manual(values = colors_ALL)+
+  scale_shape_manual(values = shape_triplicates, labels = c("1", "2", "3")) +  # Define diferentes formas
+  scale_x_discrete(labels = labels_ALL) +
+  guides( fill = "none", color = "none", shape = guide_legend(title = "Chamber Number\n per treatment")) +
+  labs(x = "", y = paste0("Δ height (cm)"),fill = "") +
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 25),
+    plot.title = element_text(lineheight = 1.1)
+  ) +
+  ggtitle("") +
+  coord_flip()
+
+# Export image
+ggsave("../outputs/height_trees_per_chamber-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# FIG: 4: height_trees_per_ozone-damage-treatment
+
+##plot
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+# Filtrando datos para asintomáticos
+df_asymptomatic <- df_JunDel[df_JunDel$ozone_damage == "0", ]
+
+table(df_asymptomatic$treatment)
+df_asymptomatic$treatment <- factor(df_asymptomatic$treatment)
+
+# ANOVA para asintomáticos
+anova_asymptomatic <- aov(delta_altura ~ treatment, data = df_asymptomatic)
+summary(anova_asymptomatic)
+
+# Filtrando datos para sintomáticos
+df_symptomatic <- df_JunDel[df_JunDel$ozone_damage == "1", ]
+
+table(df_symptomatic$treatment)
+df_symptomatic$treatment <- factor(df_symptomatic$treatment)
+
+# ANOVA para sintomáticos
+anova_symptomatic <- aov(delta_altura ~ treatment, data = df_symptomatic)
+summary(anova_symptomatic)
+
+ggplot(df_JunDel, aes(x = treatment, y = delta_altura, shape = as.factor(ozone_damage), # Mapear formas a ozone_damage
+  fill = treatment,               # Mapear colores de relleno a treatment
+  color = treatment # Mapear colores de borde a ozone_damage
+)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) + 
+  geom_jitter(position = position_jitterdodge(), size = 6) +
+  labs(title = "",
+       x = "",
+       y = "Δ height (cm)") +
+  scale_x_discrete(labels = labels_ALL)+
+  scale_fill_manual(values = colors_ALL)+
+  scale_color_manual(values = colors_ALL)+
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic"))+
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.9, 
+    size = 9)+
+  guides( fill = "none",shape = guide_legend(title = "Condition after\n treatment"), color = "none")+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  )
+
+# Export image
+ggsave("../outputs/height_trees_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+
+
+```
+
+# FIG. 5: chlorophyll_trees_per_ozone-damage-treatment
+
+##Load data
+```{r }
+## Load data 
+Chloro_data<- read.xlsx("../metadata/ABS_2.xlsx", sheet = 1)  # Puedes ajustar el número de hoja según tu archivo
+
+Chloro_data$chlo_A<-(12.25*(Chloro_data$NM664-0.044))-(2.79*(Chloro_data$NM647-0.044))
+
+Chloro_data$chlo_B<-(21.5*(Chloro_data$NM647-0.044))-(5.1*(Chloro_data$NM664-0.044))
+
+Chloro_data$Total<-(Chloro_data$chlo_A+Chloro_data$chlo_B)
+
+# Filtrar los datos para eliminar ciertos tratamientos
+datos_filtrados <- Chloro_data %>%
+  filter(!TREATMENT %in% c("VACIO", "BLANCO")) %>%
+  filter(!DAY %in% c("DIA01"))
+
+levels(factor(datos_filtrados$TREATMENT))
+
+datos_filtrados$TREATMENT <- factor(datos_filtrados$TREATMENT, 
+                     levels = c("AX", "AE", "AP", "CC", "CA"))
+
+levels(factor(datos_filtrados$TREATMENT))
+
+datos_filtrados <- datos_filtrados %>%
+  mutate(chamber_ind = paste(chamber_number, tree_number, sep = "_"))
+
+# Calcular el promedio de clorofila por individuo
+total_chloro <- datos_filtrados %>%
+  group_by(chamber_ind) %>% # Agrupar por ID y otras columnas que desees mantener
+  summarise(Promedio_Clorofila = mean(Total, na.rm = T)) 
+
+df_merge <- left_join(total_chloro,df_JunDel, by = "chamber_ind")
+
+datos_filtrados_2 <- datos_filtrados %>%
+  mutate(chamber_ind = paste(chamber_number, tree_number, sep = "_"))
+
+# Calcular el promedio de clorofila por individuo
+total_chloro <- datos_filtrados_2 %>%
+  group_by(chamber_ind) %>% # Agrupar por ID y otras columnas que desees mantener
+  summarise(Promedio_Clorofila = mean(Total, na.rm = T)) 
+
+df_merge <- left_join(total_chloro,df_JunDel, by = "chamber_ind")
+
+df_merge <- df_merge %>% filter(!chamber_ind %in% c("10_18", "3_25"))
+```
+
+## plot
+```{r }
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+ggplot(df_merge, aes(x = treatment, y = Promedio_Clorofila, shape = as.factor(ozone_damage), # Mapear formas a ozone_damage
+  fill = treatment,               # Mapear colores de relleno a treatment
+  color = treatment # Mapear colores de borde a ozone_damage
+)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) + 
+  geom_jitter(position = position_jitterdodge(), size = 6) +
+  labs(title = "",
+       x = "",
+       y = "Total Chlorophyll (mg/g)") +
+  guides( fill = "none",shape = guide_legend(title = "Condition after\n treatment"), color = "none")+
+  scale_x_discrete(labels = labels_ALL)+
+  scale_fill_manual(values = colors_ALL)+
+  scale_color_manual(values = colors_ALL)+
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic"))+
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.9,
+    size =9)+  
+  ggtitle("") +
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 25),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+# Filtrando datos para asintomáticos
+df_asymptomatic <- df_merge[df_merge$ozone_damage == "0", ]
+
+table(df_asymptomatic$treatment)
+df_asymptomatic$treatment <- factor(df_asymptomatic$treatment)
+
+# ANOVA para asintomáticos
+anova_asymptomatic <- aov(Promedio_Clorofila ~ treatment, data = df_asymptomatic)
+summary(anova_asymptomatic)
+# Prueba de Kruskal-Wallis para asintomáticos
+kruskal_asymptomatic <- kruskal.test(Promedio_Clorofila ~ treatment, data = df_asymptomatic)
+kruskal_asymptomatic
+
+# Test de Tukey
+tukey_asymptomatic <- TukeyHSD(anova_asymptomatic)
+
+# Ver resultados del test de Tukey
+summary(tukey_asymptomatic)
+
+
+# Filtrando datos para sintomáticos
+df_symptomatic <- df_merge[df_merge$ozone_damage == "1", ]
+
+table(df_symptomatic$treatment)
+df_symptomatic$treatment <- factor(df_symptomatic$treatment)
+
+
+# ANOVA para sintomáticos
+anova_symptomatic <- aov(Promedio_Clorofila ~ treatment, data = df_symptomatic)
+summary(anova_symptomatic)
+
+# Export image
+ggsave("../outputs/chlorophyll_trees_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# FIG. 6: ozone_damage_delta-height_association descartando a arboles del bosque
+
+```{r }
+
+df_merge_asociat <- df_merge %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+# Ajustar un modelo de regresión lineal
+modelo_lm <- lm(delta_altura ~ Promedio_Clorofila * factor(ozone_damage), data = df_merge_asociat)
+
+# Ver resumen del modelo (estadísticos del modelo)
+summary(modelo_lm)
+
+# Extraer los estadísticos del modelo
+summary_modelo <- summary(modelo_lm)
+r_squared <- summary_modelo$r.squared  # R²
+r_squared_adj <- summary_modelo$adj.r.squared  # R² ajustado
+f_statistic <- summary_modelo$fstatistic[1]  # Estadístico F
+f_p_value <- summary_modelo$fstatistic[3]  # p-valor del estadístico F
+
+# Coeficientes y p-valores
+coeficientes <- summary_modelo$coefficients[, 1]  # Coeficientes
+p_values <- summary_modelo$coefficients[, 4]  # Valores p
+
+library(ggpmisc)
+
+# Crear el gráfico
+ggplot(df_merge_asociat, aes(
+  x = Promedio_Clorofila, 
+  y = delta_altura, 
+  color = as.factor(ozone_damage),  
+  shape = as.factor(ozone_damage),  
+  fill = as.factor(ozone_damage)
+)) +
+  geom_point(size = 6, alpha = 0.7) +  # Puntos para los datos individuales
+  geom_smooth(method = "lm", se = TRUE, aes(fill = as.factor(ozone_damage)), alpha = 0.2, size = 2) +
+  stat_poly_eq(
+    aes(label = ..eq.label..), 
+    formula = y ~ x, 
+    parse = TRUE
+  ) +   # Añade la ecuación y R² automáticamente
+  labs(
+    title = "",
+    x = "Total Chlorophyll (mg/g)",
+    y = "Δ height (cm)",
+    color = "Fenotipo",
+    shape = "Condition after\n treatment"
+  ) +
+  guides(  
+    color = "none", 
+    fill = "none",
+    shape = guide_legend(title = "Condition after\n treatment")
+  ) +
+  scale_color_manual(values = c("0" = "blue", "1" = "red")) +
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic")) +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "pink")) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),
+    axis.text.y = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25),
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 25),
+    plot.title = element_text(lineheight = 1.1)
+  ) +
+  # Agregar el valor de R² en el gráfico
+  annotate("text", x = max(df_merge_asociat$Promedio_Clorofila), y = max(df_merge_asociat$delta_altura), 
+           label = paste("R² =", round(r_squared, 3)), 
+           hjust = 1, vjust = 1, size = 6, color = "black")
+
+# Export image
+ggsave("../outputs/ozone_damage_delta-height_association_with out forest.png", width = 16, height = 10, dpi = 600)
+
+```
+
+```{r }
+# Add column about damage ozone condition and dead status
+df_unido_na$suv_damozo <- paste(df_unido_na$survivors, df_unido_na$ozone_damage, sep = "_")
+
+# Add column about damage ozone condition and dead status
+df_unido$suv_damozo <- paste(df_unido$survivors, df_unido$ozone_damage, sep = "_")
+
+```
+
+### Contingency
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- df_unido %>%
+    filter(treatment == c("ozone_contingency"))
+
+plot1<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Contingency",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none") +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+plot1
+
+```
+
+### Moderate
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- df_unido %>%
+    filter(treatment == c("ozone_moderate"))
+
+plot2<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+geom_point(size = 3, alpha = 0.7, shape=15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Moderate",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  )
+
+  
+plot2
+```
+
+### ambient_air_IE
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- df_unido %>%
+    filter(treatment == c("ambient_air_IE"))
+
+plot3<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Ambient air UNAM",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+theme_bw() +
+   theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+plot3
+
+```
+
+### purified_air
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- df_unido %>%
+    filter(treatment == c("purified_air"))
+
+plot4<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Purified air",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at UNAM", "January_2024" = "Three months after\n to return to the forest"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, size = 15,margin = margin(t = 10)),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  ) 
+
+plot4
+```
+
+### ambient_air_SRX
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- df_unido %>%
+    filter(treatment == c("ambient_air_SRX"))
+
+plot5<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 3, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Nursery",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "March 2023", "June_2023" = "June 2023", "October_2023" = "October 2023", "January_2024" = "January 2024"))+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5, size = 15,margin = margin(t = 10)),  # Tamaño del texto del eje X
+    axis.text.y =  element_blank(),                       # Tamaño del texto del eje Y
+    legend.title = element_text(size = 20),               # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+plot5
+
+```
+
+
+### legend
+
+```{r }
+#"ambient_air_SRX", "purified_air", "ambient_air_IE", "ozone_moderate#,  "ozone_contingency"
+
+df_filtered <- df_unido_na %>%
+    filter(treatment == c("purified_air"))
+
+plot6<- ggplot(df_filtered, aes(x = monthCollect, y = chamber_ind, color = suv_damozo)) +
+  geom_point(size = 5, alpha = 0.7, shape= 15) +  # Puntos para cada individuo
+  labs(
+    title = "",
+    x = "",
+    y = "Purified air",
+    color = "") +
+  scale_color_manual(values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey20"), guide = "none")  +
+  scale_x_discrete(labels = c("March_2023" = "Before Fumigation", "June_2023" = "After Fumigation", "October_2023" = "Three months after\n treatment at University", "January_2024" = "Six months after\n treatment at forest"))+
+  theme_bw()
+
+plot6
+
+```
+
+
+```{r }
+library(gridExtra)
+library(grid)
+library(gtable)
+library(cowplot)
+
+# Agregar una leyenda común
+legend <- get_legend(plot6 + theme(legend.position = "top", 
+          legend.title = element_text(size = 30),
+          legend.text = element_text(size = 30),
+          plot.margin = unit(c(1, 1, 1, 1), "cm")))  
+
+
+
+grid_plot <- grid.arrange(
+  plot1 + theme(legend.position = "none"),
+  plot2,
+  plot3,
+  plot4,
+  plot5, # Leyenda aumentada
+  ncol = 1
+)
+ggsave("../outputs/treatments_survives.png", plot = grid_plot, width = 10, height = 20, dpi = 300)
+```
+
+```{r }
+
+df_summary <- df_unido_na %>%
+  group_by(monthCollect, treatment, suv_damozo) %>%      # Agrupamos por mes, tratamiento y condición
+  summarise(count = n()) %>%                               # Contamos el número de observaciones por grupo
+  ungroup() %>%
+  group_by(monthCollect, treatment) %>%                     # Agrupamos por mes y tratamiento para calcular la proporción
+  mutate(total = sum(count),                               # Calculamos el total de individuos por mes y tratamiento
+         proportion =  round((count / total) * 100, 1))                   # Calculamos la proporción de cada condición
+
+# Ver los resultados
+print(df_summary)
+
+write.csv(df_summary, "../outputs/df_summary.csv", row.names = FALSE)
+
+# Crear la gráfica de barras
+bar_suvivors<-ggplot(df_summary, aes(x = treatment, y = proportion, fill = suv_damozo)) +
+  # Apilar las barras
+  geom_bar(stat = "identity", position = "stack", width = 0.7) +
+  
+  # Cambiar las etiquetas de las facetas
+  facet_wrap(~ monthCollect, scales = "free_x", 
+             labeller = labeller(monthCollect = c(
+               "March_2023" = "Before Fumigation", 
+               "June_2023" = "After Fumigation", 
+               "October_2023" = "Three Months After\nTreatment at University", 
+               "January_2024" = "Six Months After\nTreatment at Forest"
+             ))) +
+  
+  # Etiquetas de los ejes y la leyenda
+  labs(
+    x = "Treatment",
+    y = "Proportion of Individuals (%)",
+    fill = "Survival Status"
+  ) +
+  
+  # Definir etiquetas personalizadas para las barras
+  scale_x_discrete(labels = labels_ALL) +
+  
+  # Cambiar el color de las barras y la leyenda de la condición
+  scale_fill_manual(
+    values = c("survive_0" = "green", "survive_1" = "red", "dead_NA" = "grey"),
+    labels = c(
+      "survive_0" = "Survived Asymptomatic", 
+      "survive_1" = "Survived Symptomatic", 
+      "dead_NA" = "Dead"
+    )
+  ) +
+  
+  # Estilo del gráfico
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Rotar el texto del eje X
+    axis.text.y = element_text(size = 25),  # Ajustar tamaño del texto en el eje Y
+    text = element_text(size = 25),
+    legend.position = "bottom",  # Posicionar la leyenda en la parte inferior
+    legend.title = element_text(size = 25),  # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25)   # Tamaño del texto de la leyenda
+  )
+
+ggsave("../outputs/treatments_survives_bars.png", plot = bar_suvivors, width = 16, height = 16, dpi = 300)
+
+
+# Realizar ANOVA para comparar las proporciones entre los diferentes niveles de 'ozone_damage' en cada tratamiento y mes
+anova_result <- aov(proportion ~ suv_damozo + treatment + monthCollect, data = df_summary)
+
+# Ver el resumen de ANOVA
+summary(anova_result)
+
+tukey_result <- TukeyHSD(anova_result)
+summary(tukey_result)
+```
+
+
+
+
+# Plot modelo 
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2 <- df_JunDel %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+
+
+ggplot(df_JunDel_2, aes(x = treatment, y = delta_altura, shape = as.factor(ozone_damage), # Mapear formas a ozone_damage
+  fill = treatment,               # Mapear colores de relleno a treatment
+  color = treatment # Mapear colores de borde a ozone_damage
+)) +
+  geom_boxplot(color="black", notch = F, alpha = 0.2) + 
+  geom_jitter(position = position_jitterdodge(), size = 6) +
+  labs(title = "",
+       x = "",
+       y = "Δ height (cm)") +
+  scale_x_discrete(labels = labels_woSRX)+
+  scale_fill_manual(values = colors_woSRX)+
+  scale_color_manual(values = colors_woSRX)+
+  scale_shape_manual(values = shape_ozone, labels = c("asymptomatic", "symptomatic"))+
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.9, 
+    size = 9)+
+  guides( fill = "none",shape = guide_legend(title = "Condition after\n treatment"), color = "none")+
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 25),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 25),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 25),
+    legend.title.align = 0.5,
+    legend.position = "bottom",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1)
+  )
+
+# Export image
+ggsave("../outputs/model_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+```{r }
+
+
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+df_JunDel_2allAP <- df_JunDel_2Rel %>%
+  filter(treatment != "purified_air")       
+
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2allAP, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2allAP, family = Gamma(link = "log"))
+summary(model2)
+
+
+model3 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2allAP, family = Gamma(link = "log"))
+summary(model3)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3)
+
+
+```
+
+
+
+
+# Plot modelo per RELATEDNESS/DeltaAltura P3
+
+
+
+```{r }
+
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrix.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+df_GroupsMatrixP3 <- df %>% filter(GroupMatrix %in% c("P3_groupA", "P3_groupB", "P3_groupC", "P3_groupD"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixP3[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% 
+  filter(!treatment %in% c( "ambient_air_SRX"))%>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+
+ggplot(df_JunDel_2Rel, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# Plot modelo per RELATEDNESS/DeltaAltura P4
+
+```{r }
+
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrix.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+df_GroupsMatrixP4 <- df %>% filter(GroupMatrix %in% c("P4_groupA", "P4_groupB", "P4_groupC", "P4_groupD", "P4_groupE"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixP4[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% 
+  filter(!treatment %in% c( "ambient_air_SRX")) %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+ggplot(df_JunDel_2Rel, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+# Plot modelo per RELATEDNESS/DeltaAltura P4 y grupo de P3
+
+```{r }
+
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrix.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+df_GroupsMatrixPmix <- df %>% filter(GroupMatrix %in% c("P4_groupA", "P4_groupB", "P4_groupC", "P4_groupD", "P4_groupE",  "P3_groupC"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixPmix[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+df_JunDel_2Rel$GroupMatrix
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+df_JunDel_2Rel_filtrado <- df_JunDel_2Rel %>%
+  filter(GroupMatrix != "No_sequenced") %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+df_JunDel_2Rel_filtrado <- df_JunDel_2Rel_filtrado %>%
+  mutate(GroupMatrix = case_when(
+    GroupMatrix %in% c("P3_groupC", "P4_groupD") ~ "P4DyP3C",
+    TRUE ~ GroupMatrix  # Mantiene los demás valores sin cambios
+  ))
+
+
+
+ggplot(df_JunDel_2Rel_filtrado, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrixMix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-Groupmix.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+
+# Plot samples RELATEDNESS/DeltaAltura P3yP4 same assambly
+
+```{r }
+#Load data Grupos Geneticos
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrixP3y4.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+
+df_GroupsMatrixPmix <- df_GroupsMatrix %>% filter(GroupMatrix %in% c("P3y4_groupA", "P3y4_groupB", "P3y4_groupC", "P3y4_groupD", "P3y4_groupE", "P3y4_groupF"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixPmix[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+df_JunDel_2Rel$GroupMatrix
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+df_JunDel_2Rel_filtrado <- df_JunDel_2Rel %>%
+  filter(!GroupMatrix %in% c("No_sequenced", "P3y4_groupF")) %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+
+ggplot(df_JunDel_2Rel_filtrado, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM","ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_x_discrete(labels = c("0" = "Assymptomatic", "1" = "Symptomatic")) +  # Cambiar etiquetas del eje X
+  scale_shape_manual(values = shape_GroupsMatrixP3y4) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = "none" ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 25),   # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-GroupP3y4.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+
+## Plot samples RELATEDNESS/Clorofila P3yP4 same assambly
+
+
+```{r }
+
+df_mergeRel<- df_merge
+
+# Unir df_Jun con Matrix usando la columna ID
+df_mergeRel <- merge(df_mergeRel, df_GroupsMatrixPmix[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_mergeRel$GroupMatrix[is.na(df_mergeRel$GroupMatrix)] <- "No_sequenced"
+
+# Ver el resultado
+head(df_mergeRel)
+
+```
+
+```{r }
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+#df_mergeRel_filtrado <- df_mergeRel %>%
+ # filter(GroupMatrix != "No_sequenced") %>%  # Filtrar antes de eliminar duplicados
+  #distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+df_mergeRel_filtrado <- df_mergeRel %>%
+  filter(!GroupMatrix %in% c("No_sequenced", "P3y4_groupF")) %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+df_mergeRel_filtrado <- df_mergeRel_filtrado %>%
+  mutate(GroupMatrix = case_when(
+    GroupMatrix %in% c("P3_groupC", "P4_groupD") ~ "P4DyP3C",
+    TRUE ~ GroupMatrix  # Mantiene los demás valores sin cambios
+  ))
+
+
+ggplot(df_mergeRel_filtrado, aes(x = as.factor(ozone_damage), y = Promedio_Clorofila, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM", "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "",
+       y = "Total Chlorophyll (mg/g)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_x_discrete(labels = c("0" = "Assymptomatic", "1" = "Symptomatic")) +  # Cambiar etiquetas del eje X
+  scale_shape_manual(values = shape_GroupsMatrixP3y4) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = "none" ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 25), # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_Cloro_P3y4.png", width = 16, height = 10, dpi = 600)
+
+```
+# Modelo
+
+```{r }
+
+# Load data
+#df_merge_2 <- df_merge %>% filter(!treatment %in% c("ambient_air_SRX"))
+
+#¿Que distribución tienen mis datos?
+
+# Histograma
+hist(df_JunDel_2Rel_filtrado$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+summary(df_JunDel_2Rel_filtrado$delta_altura)
+
+
+
+shapiro_test <- shapiro.test(df_JunDel_2Rel_filtrado$delta_altura)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Borrar
+rm(shapiro_test)
+
+hist(log(df_JunDel_2Rel_filtrado$delta_altura), main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+
+
+
+
+
+# Histograma
+hist(df_mergeRel_filtradoSRX$Promedio_Clorofila, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+summary(df_mergeRel_filtradoSRX$Promedio_Clorofila)
+
+
+
+shapiro_test <- shapiro.test(df_mergeRel_filtradoSRX$Promedio_Clorofila)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Los datos tienen distribucion normal 
+```
+
+
+```{r }
+
+
+df_mergeRel_filtradoSRX <- df_mergeRel_filtrado %>% filter(treatment != "ambient_air_SRX")
+
+df_mergeRel_filtradoSRX$GroupMatrix
+
+df_mergeRel_filtradoSRX$treatment <- droplevels(df_mergeRel_filtradoSRX$treatment)
+
+df_mergeRel_filtradoSRX <- df_mergeRel_filtrado %>% filter(ID != c("AE22_N04TAF", "AP12_N04TAF"))
+                                                           
+
+
+```
+#Modelo delta Altura 
+
+
+```{r }
+
+model1_gamma <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+model1_gaussian <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtrado, family = gaussian(link = "identity"))
+
+# Comparar AIC de los modelos
+AIC(model1_gamma, model1_gaussian)
+```
+
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+het_dataNSGG4AP$ozone_damage <- factor(het_dataNSGG4AP$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "Heterocigosity", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+
+```{r }
+
+
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+      
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glm(delta_altura ~ ozone_damage +  GroupMatrix, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glm(delta_altura ~ ozone_damage + treatment + GroupMatrix, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model5)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|treatment) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model5)
+
+
+model6 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model6)
+
+
+model7 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix/treatment) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix), data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model8)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8)
+
+
+```
+
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+df_JunDel_2Rel_filtradoAP <- df_JunDel_2Rel_filtrado %>%
+  filter(treatment != "purified_air")                             
+
+hist(df_JunDel_2Rel_filtradoAP$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+      
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glm(delta_altura ~ ozone_damage +  GroupMatrix, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glm(delta_altura ~ ozone_damage + treatment + GroupMatrix, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model5)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model5)
+
+
+model6 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model6)
+
+
+model7 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix/treatment) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix), data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model8)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8)
+
+```
+
+
+
+
+
+#CLOROFILA
+
+```{r }
+library(lme4)
+library(lmerTest)
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+model1 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix), data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix), data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glmer(Promedio_Clorofila~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix/chamber_number) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model4)
+
+# Creo es el mejor
+model5 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix/chamber_number) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model5)
+
+model6 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix/chamber_number) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model6)
+
+model7 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix/treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix/treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model8)
+
+# Segundo mejor
+model9 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix/treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model9)
+
+model10 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) + (1|treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model10)
+
+model11 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix) + (1|treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model11)
+
+model12 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|treatment/GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model12)
+
+model13 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|treatment/GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model13)
+
+# Segundo mejor
+model14 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|treatment/GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model14)
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8, model9, model10, model11, model12, model13, model14)
+
+# Summaries
+summary(model1)
+summary(model2)
+summary(model3)
+summary(model4)
+summary(model5) 
+summary(model6)
+summary(model7)
+summary(model8) 
+summary(model9)
+summary(model10) 
+summary(model11)
+summary(model12)
+summary(model13) 
+summary(model14)
+
+
+```
+
+# Calcular HETEROCIGOSIDAD
+
+
+```{r }
+# Leer el archivo .het
+het_data <- read.table("../metadata/heterocigosidad.het", header = TRUE)
+
+# Cambiar el nombre de la columna 'IND' por 'ID'
+colnames(het_data)[colnames(het_data) == "INDV"] <- "ID"
+
+# Verificar que se cambió el nombre
+head(het_data)
+
+
+# Calcular la heterocigosidad observada
+het_data$H_obs <- 1 - (het_data$O.HOM / het_data$N_SITES)
+
+# Ver los resultados
+head(het_data)
+
+```
+
+
+```{r }
+# Calcular la heterocigosidad observada
+het_data$H_obs <- 1 - (het_data$O.HOM / het_data$N_SITES)
+
+# Ver los resultados
+head(het_data)
+
+```
+
+
+```{r }
+# Histograma de la heterocigosidad observada
+hist(het_data$H_obs, 
+     main = "Distribución deHeterocigosidad por Individuo de Seq y No Seq de 4 tratamientos", 
+     xlab = "Heterocigosidad Observada", 
+     col = "lightblue", 
+     border = "blue")
+```
+
+
+```{r }
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(het_data$H_obs, 
+     main = "Heterocigosidad por Individuo de Seq y No Seq de 4 tratamientos", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+```{r }
+summary(het_data$H_obs)
+```
+
+```{r }
+
+# Combinar el DataFrame de heterocigosidad con el DataFrame de fenotipos
+het_data <- merge(het_data, df_JunDel_2Rel, by = "ID")
+
+# Ver los primeros registros del DataFrame combinado
+head(het_data)
+
+
+het_dataNSGG4 <- het_data %>%
+  filter(GroupMatrix != "No_sequenced" & GroupMatrix != "P3y4_groupF")
+
+```
+
+
+```{r }
+# Graficar la heterocigosidad observada por fenotipo
+boxplot(H_obs ~ ozone_damage, data = het_dataNSGG4, 
+        main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos con AP", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+
+```{r }
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(het_dataNSGG4$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos con AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+```{r }
+
+
+het_dataNSGG4AP <- het_data %>%
+  filter(GroupMatrix != "No_sequenced" & 
+         GroupMatrix != "P3y4_groupF" & 
+         treatment != "purified_air")
+
+# Verificar el resultado
+head(het_dataNSGG4AP)
+
+```
+
+
+```{r }
+# Graficar la heterocigosidad observada por fenotipo
+boxplot(H_obs ~ ozone_damage, data = het_dataNSGG4AP, 
+        main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+```{r }
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(het_dataNSGG4AP$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+```{r }
+# Graficar la heterocigosidad observada por Grupo Genetico
+boxplot(H_obs ~ GroupMatrix, data = het_dataNSGG4AP, 
+        main = "Heterocigosidad Observada por Grupo Genetico", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+
+
+```{r }
+
+# Crear un vector de colores según el fenotipo o grupo
+colores <- as.factor(het_dataNSGG4AP$ozone_damage)  # o 'fenotipo', si es la columna que tienes
+
+# Graficar, usando colores distintos para cada grupo
+plot(het_dataNSGG4AP$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = colores)
+
+
+```
+
+
+# Modelo considerando HETEROCIGOSIDAD
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+# Prueba con distintas familias
+fig_gaussian <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = gaussian(link = "identity")), fullrange = TRUE) +
+  labs(title = "GLM con Gaussian", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+fig_gamma <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), fullrange = TRUE) +
+  labs(title = "GLM con Gamma", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+fig_inverse_gaussian <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = inverse.gaussian(link = "log")), fullrange = TRUE) +
+  labs(title = "GLM con Inverse Gaussian", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+# Mostrar los gráficos
+print(fig_gaussian)
+print(fig_gamma)
+print(fig_inverse_gaussian)
+
+
+model_gaussian <- glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = gaussian(link = "identity"))
+model_gamma <- glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+model_inverse_gaussian <- glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = inverse.gaussian(link = "log"))
+
+# Comparar AIC de los modelos
+AIC(model_gaussian, model_gamma, model_inverse_gaussian)
+
+```
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+het_dataNSGG4AP$ozone_damage <- factor(het_dataNSGG4AP$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "Heterocigosity", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+
+```{r }
+# Model all independent variables WITH health status interaction 
+
+
+glm_1<-glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_1)
+
+
+glm_2<-glm(delta_altura ~ H_obs + ozone_damage, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_2)
+
+
+
+glm_3<-glm(delta_altura ~ H_obs + treatment, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_3)
+
+
+
+glm_4<-glm(delta_altura ~ H_obs + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_4)
+
+
+glm_5<-glm(delta_altura ~ H_obs + treatment + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_5)
+
+glm_6<-glm(delta_altura ~ H_obs + ozone_damage + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_6)
+
+
+glm_7<-glm(delta_altura ~ H_obs + ozone_damage + treatment, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_7)
+
+
+glm_8<-glm(delta_altura ~ H_obs + ozone_damage + treatment + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_8)
+
+
+glm_9<-glmer(delta_altura ~ H_obs + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_9)
+
+
+glm_10<-glmer(delta_altura ~ H_obs + ozone_damage + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_10)
+
+
+
+glm_11<-glmer(delta_altura ~ H_obs + treatment + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_11)
+
+
+
+glm_12<-glmer(delta_altura ~ H_obs + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_12)
+
+
+glm_13<-glmer(delta_altura ~ H_obs + treatment + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_13)
+
+glm_14<-glmer(delta_altura ~ H_obs + ozone_damage + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_14)
+
+
+glm_15<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_15)
+
+
+
+glm_16<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_16)
+
+
+glm_17<-glmer(delta_altura ~ H_obs + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_17)
+
+
+glm_18<-glmer(delta_altura ~ H_obs + ozone_damage + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_18)
+
+glm_19<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_19)
+
+glm_20<-glmer(delta_altura ~ H_obs + ozone_damage + GroupMatrix + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_20)
+
+glm_21<-glmer(delta_altura ~ H_obs + ozone_damage + treatment+  GroupMatrix +(1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_21)
+
+# Comparar los AIC de los dos modelos
+AIC(glm_1, glm_2, glm_3, glm_4, glm_5,
+    glm_6, glm_7, glm_8, glm_9, glm_10,
+    glm_11, glm_12, glm_13, glm_14, glm_15,
+    glm_16, glm_17, glm_18, glm_19, glm_20,
+    glm_21)
+
+
+```
+
+
+```{r }
+
+```
+
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+df_JunDel_2Rel_filtradoAP <- df_JunDel_2Rel_filtrado %>%
+  filter(treatment != "purified_air")                             
+
+hist(df_JunDel_2Rel_filtradoAP$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+      
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model2)
+
+model3 <- glm(delta_altura ~ ozone_damage +  GroupMatrix, data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model3)
+
+#model4 <- glm(delta_altura ~ ozone_damage + treatment + GroupMatrix, data = #df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+#summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model5)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model5)
+
+
+model6 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model6)
+
+
+model7 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix/treatment) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model7)
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model5, model6, model7)
+
+# Summaries
+summary(model1)
+summary(model2)
+summary(model3)
+#summary(model4)
+summary(model5) 
+summary(model6)
+summary(model7)
+
+
+
+```
+
+
+
+
+
+

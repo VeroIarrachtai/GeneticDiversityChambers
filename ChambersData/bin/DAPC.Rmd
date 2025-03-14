@@ -1,0 +1,90 @@
+---
+title: "DAPC"
+output: html_document
+date: "2025-03-11"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+########## find.cluster + dapc #######
+# creamos un genlight
+vcfR_chambers <- read.vcfR("../../../../VCF/vcf_filtrado_ozoned.vcf")
+vcf_chambers<-vcfR2genlight(vcfR_chambers)
+
+```
+
+
+```{r}
+
+# corremos find.cluster, se escoje un numero maximo de clusters por si existe un efecto placa,
+grp <- find.clusters(vcf_chambers, max.n.clust = 10, n.pca = 200, choose = FALSE, stat = "BIC", method = "kmeans")
+plot(grp$Kstat, type = "o", xlab = "numero de grupos (K)",
+     ylab = "BIC",
+     main = "find.clusters")
+
+grp$grp
+
+# guardamos los resultados
+grupos_formados <- as.data.frame(grp$grp)
+write.csv(grupos_formados, "../outputs/grupos_formados_find.clusters_2.csv")
+
+```
+
+
+```{r}
+# corremos dapc con los grupos formados
+dapc1 <- dapc(vcf_chambers, grp$grp, n.pca = 50, n.da = 2) 
+scatter(dapc1) # graficamos, los resultados indican que el efecto placa sigue
+
+```
+
+
+
+```{r}
+########## dapc categorias de daño #####
+vcfR_chambers2 <- read.vcfR("../../../../VCF/vcf_filtrado_ozoned.vcf")
+vcf_chambers2<-vcfR2genlight(vcfR_chambers2)
+
+
+```
+
+
+
+```{r}
+# cargamos los datos de las categorias de daño
+meta <- read.table("../metadata/pops_ozonedAECCCA.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
+
+pop(vcf_chambers2) <- meta$Group
+
+vcf_chambers2@ind.names
+
+```
+
+
+```{r}
+# xvalDAPC r
+paj<-xvalDapc(tab(vcf_chambers2,NA.method="mean"), pop(vcf_chambers2))
+plotdapc <- scatter(paj$DAPC, mstree = T, clabel = T, lwd = 2, grid=T, cex=3,
+                    cleg = 0.80, posi.da = "bottomleft", col = c("darkgreen","gold2", "chocolate1", "red4")  )
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+

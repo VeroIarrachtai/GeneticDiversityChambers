@@ -35,40 +35,89 @@ GBS <- read.xlsx("../metadata/GBS.xlsx")
 Epi_GBS <- read.xlsx("../metadata/Epi_GBS.xlsx")  
 
 forest_monitoring <- read.xlsx("../metadata/muestreo_dic2020_tidy.xlsx")  
-```
 
-```{r}
- # Selecciona las columnas de informacion del data frame del monitoreo participativo para incluirlas en la muestras que se secuenciaron por GBS
-
-forest_selected <- forest_monitoring[, c("locality_key", "plot","tree_health", "X_coordinates_latitude","X_coordinates_longitude", "X_coordinates_altitude","person_key", "tree_number", "tree_diameter_category", "tree_heigth", "tree_nodes", "ozone_damage_percentage", "other_damages_percentage", "other_damages_percentage.less_10", "other_damages_percentage.10.40", "other_damages_percentage.50","other_damages_percentage.50.70","other_damages_percentage.70.100", "bud", "branch_nodes", "nodes_with_leaves", "cones", "cone_sex", "tree_exposition", "surronding_vegetation.fir","surronding_vegetation.pine", "surronding_vegetation.oak", "surronding_vegetation.bush", "surronding_vegetation.grass", "surronding_vegetation.other", "reforested", "tree_id")]
-
-# Une datos de la data frame GBS y datos seleccionados de la data frame del monitoreo participativo forest_monitoring 
-df_combined_GBS <- merge(GBS, forest_selected, by = "tree_id",all.x = TRUE)
 
 ```
+
+
 
 ```{r}
 #Detectar diferencias entre 2 columnas
 
 #Descartar B122, G110, G63 porque el número de nodos o el numero de parcela difiere entre ambas bases
 
-#| Sampe     |       Database     |    Plot  |
+#| Sample     |       Database     |    Plot  |
 #|-----------|-------------------|-----------|
 #| B122      | forest_monitoring |    39     | # Hay 2  valores uno es B121
 #| B122      |        GBS        |    39     |
 #| G110      | forest_monitoring |  35 y 33  | # Hay 2  valores una era G113(35)
 #| G110      |        GBS        |    30     |
-#|  G63      | forest_monitoring |    20     | # Hay 2  valores una es G63 y otra G163
+#|  G63      | forest_monitoring |    20     | # Hay 2  valores una es G63 y otra G67
 #|  G63      |        GBS        |    20     |
 
 # Los detecte porque al combinar las bases de datos se duplicaban los datos de esas muestras y cambiaba el numero total de muestras
 
-# Filtrar eliminando las filas con ID específicos
-df_combined_GBS <- df_combined_GBS %>%
-  filter(!tree_id %in% c("B112", "G110", "G63"))
+# B122 tree_nodes 12 es B121 de acuerdo a la foto en KOBO. Sin embargo ya hay un B121 en la base de datos
+# B122 tree_nodes 8 es B122 de acuerdo a la foto en KOBO
 
+# G110 tree_nodes 6 es G113 de acuerdo a la foto en KOBO
+# G110 tree_nodes 7 es G110 de acuerdo a la foto en KOBO
+
+# G63 tree_nodes 10 es G67 de acuerdo a la foto en KOBO
+# G63 tree_nodes 7 es G63 de acuerdo a la foto en KOBO
+
+
+#Corregir datos en la base de datos
+
+
+# Crear data frame de ejemplo
+
+
+
+# Reemplazar tree_ID
+forest_monitoring <- forest_monitoring %>%
+  mutate(tree_id = ifelse(tree_id == "G110" & tree_nodes == 6, "G113", tree_id))
+
+# Modificar tree_number porque tenia el mismo de tree_ID
+forest_monitoring <- forest_monitoring %>%
+  mutate(tree_number = ifelse(tree_id == "G113", 113, tree_number))
+
+
+
+# Reemplazar tree_ID
+forest_monitoring <- forest_monitoring %>%
+  mutate(tree_id = ifelse(tree_id == "G63" & tree_nodes == 10, "G67", tree_id))
+
+# Modificar tree_number porque tenia el mismo de tree_ID
+forest_monitoring <- forest_monitoring %>%
+  mutate(tree_number = ifelse(tree_id == "G67", 67, tree_number))
+
+# Reemplazar tree_ID
+forest_monitoring <- forest_monitoring %>%
+  mutate(tree_id = ifelse(tree_id == "B122" & tree_nodes == 12, "B121", tree_id))
+
+# Modificar tree_number porque tenia el mismo de tree_ID
+forest_monitoring <- forest_monitoring %>%
+  mutate(tree_number = ifelse(tree_id == "B121", 121, tree_number))
+
+#Ahora se repiten 2 veces la B121 y los datos son diferentes, por lo cual se descarta la B121
+
+
+# Eliminar filas donde ID es "B121" y Tipo es "B"
+forest_monitoring <- forest_monitoring [!(forest_monitoring$tree_id == "B121" & forest_monitoring$person_key == "B"), ]
 
 ```
+
+```{r}
+ # Selecciona las columnas de informacion del data frame del monitoreo participativo para incluirlas en la muestras que se secuenciaron por GBS
+
+forest_selected <- forest_monitoring[, c("locality_key", "plot", "life_condition", "X_coordinates_latitude","X_coordinates_longitude", "X_coordinates_altitude","person_key", "tree_number", "photo_tree", "tree_diameter_category", "tree_heigth", "tree_nodes", "tree_health" , "ozone_damage_percentage", "other_damages_percentage", "other_damages_percentage.less_10", "other_damages_percentage.10.40","other_damages_percentage.50","other_damages_percentage.50.70","other_damages_percentage.70.100", "photo_health", "bud", "photo_bud", "branch_nodes", "nodes_with_leaves", "photo_branch", "cones", "cone_sex",  "photo_cones" , "tree_exposition", "surronding_vegetation.fir","surronding_vegetation.pine", "surronding_vegetation.oak", "surronding_vegetation.bush", "surronding_vegetation.grass", "surronding_vegetation.other", "reforested", "reforestation_code", "tree_id","tree_health_simplified","reforestation_year")]
+
+# Une datos de la data frame GBS y datos seleccionados de la data frame del monitoreo participativo forest_monitoring 
+df_combined_GBS <- merge(GBS, forest_selected, by = "tree_id",all.x = TRUE)
+
+```
+
 
 
 ```{r}
@@ -142,14 +191,14 @@ write.csv(df_combined_GBS, "../outputs/df_GBS_metadata.csv", row.names = FALSE)
 
  # Selecciona las columnas de informacion del data frame del monitoreo participativo para incluirlas en la muestras que se secuenciaron por GBS
 
-forest_selected <- forest_monitoring[, c("locality_key", "plot","tree_health", "X_coordinates_latitude","X_coordinates_longitude", "X_coordinates_altitude","person_key", "tree_number", "tree_diameter_category", "tree_heigth", "tree_nodes", "ozone_damage_percentage", "other_damages_percentage", "other_damages_percentage.less_10", "other_damages_percentage.10.40", "other_damages_percentage.50","other_damages_percentage.50.70","other_damages_percentage.70.100", "bud", "branch_nodes", "nodes_with_leaves", "cones", "cone_sex", "tree_exposition", "surronding_vegetation.fir","surronding_vegetation.pine", "surronding_vegetation.oak", "surronding_vegetation.bush", "surronding_vegetation.grass", "surronding_vegetation.other", "reforested", "tree_id")]
+forest_selected <- forest_monitoring[, c("locality_key", "plot", "life_condition", "X_coordinates_latitude","X_coordinates_longitude", "X_coordinates_altitude","person_key", "tree_number", "photo_tree", "tree_diameter_category", "tree_heigth", "tree_nodes", "tree_health" , "ozone_damage_percentage", "other_damages_percentage", "other_damages_percentage.less_10", "other_damages_percentage.10.40","other_damages_percentage.50","other_damages_percentage.50.70","other_damages_percentage.70.100", "photo_health", "bud", "photo_bud", "branch_nodes", "nodes_with_leaves", "photo_branch", "cones", "cone_sex",  "photo_cones" , "tree_exposition", "surronding_vegetation.fir","surronding_vegetation.pine", "surronding_vegetation.oak", "surronding_vegetation.bush", "surronding_vegetation.grass", "surronding_vegetation.other", "reforested", "reforestation_code", "tree_id","tree_health_simplified","reforestation_year")]
 
 # Une datos de la data frame GBS y datos seleccionados de la data frame del monitoreo participativo forest_monitoring 
 df_combined_Epi_GBS <- merge(Epi_GBS, forest_selected, by = "tree_id",all.x = TRUE)
 
 # Filtrar eliminando las filas con ID específicos
-df_combined_Epi_GBS <- df_combined_Epi_GBS %>%
-  filter(!tree_id %in% c("B112", "G110", "G63"))
+#df_combined_Epi_GBS <- df_combined_Epi_GBS %>%
+ # filter(!tree_id %in% c("B112", "G110", "G63"))
 
 #Agrega las latitudes y longitudes faltantes de las muestras que tienen datos transcriptomicos
 
