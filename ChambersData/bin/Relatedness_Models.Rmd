@@ -1,0 +1,2432 @@
+---
+title: "Ozono_concentration_chambers"
+author: "Vero"
+date: "28/10/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+```{r}
+library(vcfR)
+library(gdsfmt)
+library(SNPRelate)
+#library(related)
+library(ggplot2)
+library(pheatmap)
+library(reshape2)
+library("readxl")
+library(factoextra)
+library(dplyr)
+
+```
+
+
+# Load files
+```{r}
+info_GBS <- read.csv("../../SecuencingData/outputs/df_GBS_metadata.csv") 
+
+# Mostrar las primeras filas del data frame
+head(info_GBS)
+
+```
+
+# Make vectors to subsets in vcftools and df shorts to R
+```{r}
+
+##### Obtener muestras
+
+# Filtrar filas donde la columna reforested tenga el valor "yes"
+info_GBS_refo <- info_GBS %>%
+  filter(reforested == "yes")
+
+# Filtrar filas donde la columna reforested tenga el valor "no"
+info_GBS_natural <- info_GBS %>%
+  filter(reforested == "no")
+
+
+# Filtrar filas donde la columna condition tenga el valor "chambers"
+info_GBS_chamber <- info_GBS %>%
+  filter(person_key_GBS == "chamber")
+
+write.table(info_GBS_chamber$Sample_Name_Plate, "../metadata/SamplesVCFChambers.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+# Filtrar filas donde la columna condition tenga el valor "mothers"
+info_GBS_mother <- info_GBS %>%
+  filter(Treatment == "actual_mother")
+
+
+# Filtrar filas donde la columna condition tenga el valor "chambers"
+info_GBS_transcriptomic <- info_GBS %>%
+  filter(person_key_GBS == "transcriptomic")
+
+
+# Exportar nombre de muestras para crear vcf
+
+# Crear un vector con datos de ambas columnas
+vector_refycham <- c(info_GBS_refo$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+# Crear un vector con datos de ambas columnas
+vector_natycham <- c(info_GBS_natural$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+# Crear un vector con datos de ambas columnas
+vector_motherycham <- c(info_GBS_mother$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+# Crear un vector con datos de ambas columnas
+vector_transmotcham <- c(info_GBS_transcriptomic$Sample_Name_Plate, info_GBS_mother$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+# Crear un vector con datos de ambas columnas
+vector_transmotrefcham <- c(info_GBS_transcriptomic$Sample_Name_Plate, info_GBS_mother$Sample_Name_Plate, info_GBS_refo$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+# Crear un vector con datos de ambas columnas
+vector_transmotnatcham <- c(info_GBS_transcriptomic$Sample_Name_Plate, info_GBS_mother$Sample_Name_Plate, info_GBS_natural$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+
+# Crear un vector con datos de ambas columnas
+vector_motrefcham <- c( info_GBS_mother$Sample_Name_Plate, info_GBS_refo$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+# Crear un vector con datos de ambas columnas
+vector_motnatcham <- c(info_GBS_mother$Sample_Name_Plate, info_GBS_natural$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
+
+
+# Crear un vector con datos de ambas columnas
+vector_nat <- c(info_GBS_mother$Sample_Name_Plate, info_GBS_natural$Sample_Name_Plate)
+
+
+# Crear un vector con datos de ambas columnas
+vector_ref <- c(info_GBS_refo$Sample_Name_Plate)
+
+```
+
+## Export vectors
+```{r}
+
+# Guardar el vector en un archivo de texto (en formato de texto plano)
+write(vector_refycham, file = "../outputs/vectors_VCF/datos_vcf_refycham.txt")
+write(vector_natycham, file = "../outputs/vectors_VCF/datos_vcf_natycham.txt")
+write(vector_motherycham, file = "../outputs/vectors_VCF/datos_vcf_motherycham.txt")
+write(vector_transmotcham, file = "../outputs/vectors_VCF/datos_vcf_transmotcham.txt")
+write(vector_transmotrefcham, file = "../outputs/vectors_VCF/datos_vcf_transmotrefcham.txt")
+write(vector_transmotnatcham, file = "../outputs/vectors_VCF/datos_vcf_transmotnatcham.txt")
+write(vector_motrefcham, file = "../outputs/vectors_VCF/datos_vcf_motrefcham.txt")
+write(vector_motnatcham, file = "../outputs/vectors_VCF/datos_vcf_motnatcham.txt")
+write(vector_ref, file = "../outputs/vectors_VCF/datos_vcf_ref.txt")
+write(vector_nat, file = "../outputs/vectors_VCF/datos_vcf_nat.txt")
+
+```
+
+
+# Anotaciones colores
+```{r}
+
+# Definir colores para los estados
+ann_colors_surv <- list(Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink"))
+
+# Definir colores para los estados
+ann_colors_cham <- list(Chamber = c(
+  "1" = "black",
+  "2" = "green",
+  "3" = "red",
+  "4" = "blue",
+  "5" = "purple",
+  "6" = "orange",
+  "7" = "pink",
+  "8" = "brown",
+  "9" = "cyan",
+  "10" = "magenta",
+  "11" = "yellow",
+  "12" = "gray",
+  "13" = "lightblue",
+  "14" = "lightgreen",
+  "15" = "lightpink"
+))
+
+# Definir colores para los estados
+ann_colors_treatment <- list(Treatment = c("ambient_air_SRX" ="#697329",
+                  "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a" ))
+
+
+# Definir colores para cada anotación
+ann_colors_mix <- list(
+  Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink"), # Colores para Grupo
+  Treatment =  c("ambient_air_SRX" ="#697329",
+                 "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a" ) # Colores para Tratamiento
+)
+
+```
+
+# All SNPS 
+
+### Convertir VCF a formato GDS
+```{r}
+#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
+vcf_GBS.fn <- "../../../../VCF/all_GBS.vcf"
+
+gds_GBS.fn <- "ALLsnps.gds"
+snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
+
+# Abrir archivo GDS
+genofileGBS <- snpgdsOpen(gds_GBS.fn)
+
+```
+
+
+### RELATEDNESS aLL GBS
+```{r}
+# Calcular coeficientes de parentesco
+
+#0.5 ≈ gemelos idénticos
+#0.25 ≈ hermanos completos o padre-hijo
+#0.125 ≈ primos
+#0 ≈ no relacionados
+#Puede dar valores negativos cuando no hay relación entre muestras.
+
+
+#Crear archivo snpgdsIBDKING
+kinshipGBS<- snpgdsIBDKING(genofileGBS)
+
+kin_matrixGBSAll  <- kinshipGBS$kinship
+
+# Asignar nombres a filas y columnas (importante para identificación)
+rownames(kin_matrixGBSAll) <- colnames(kin_matrixGBSAll) <- kinshipGBS$sample.id
+
+```
+
+### Plot relatedness con ALL GBS
+
+```{r}
+
+pheatmap(kin_matrixGBSAll, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) All SNPs",
+         labels_row = rep("", nrow(kin_matrixGBS)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixGBS)) #Elimina las etiquetas de columnas
+         )
+```
+
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSAll, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) All SNPs",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas <- colnames(kin_matrixGBSAll)[p$tree_col$order]
+
+print(orden_columnas)
+```
+
+# Casi Neutrales 
+
+### Convertir VCF a formato GDS
+```{r}
+#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
+vcf_GBS.fn <- "../../../../VCF/set_casi_neutral.recode.vcf"
+
+gds_GBS.fn <- "casiN.gds"
+snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
+
+# Abrir archivo GDS
+genofileGBS <- snpgdsOpen(gds_GBS.fn)
+
+```
+
+
+### RELATEDNESS aLL GBS
+```{r}
+# Calcular coeficientes de parentesco
+
+#0.5 ≈ gemelos idénticos
+#0.25 ≈ hermanos completos o padre-hijo
+#0.125 ≈ primos
+#0 ≈ no relacionados
+#Puede dar valores negativos cuando no hay relación entre muestras.
+
+
+#Crear archivo snpgdsIBDKING
+kinshipGBS<- snpgdsIBDKING(genofileGBS)
+
+kin_matrixGBSNeut  <- kinshipGBS$kinship
+
+# Asignar nombres a filas y columnas (importante para identificación)
+rownames(kin_matrixGBSNeut) <- colnames(kin_matrixGBSNeut) <- kinshipGBS$sample.id
+
+```
+
+### Plot relatedness con ALL GBS
+
+```{r}
+
+pheatmap(kin_matrixGBSNeut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Casi Neutrales",
+         labels_row = rep("", nrow(kin_matrixGBS)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixGBS)) #Elimina las etiquetas de columnas
+         )
+```
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSNeut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Casi Neutrales",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas <- colnames(kin_matrixGBSNeut)[p$tree_col$order]
+print(orden_columnas)
+```
+
+# Casi Atipicos
+
+### Convertir VCF a formato GDS
+```{r}
+#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
+vcf_GBS.fn <- "../../../../VCF/set_casi_atipico.recode.vcf"
+
+gds_GBS.fn <- "casiAti.gds"
+snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
+
+# Abrir archivo GDS
+genofileGBS <- snpgdsOpen(gds_GBS.fn)
+
+```
+
+
+### RELATEDNESS aLL GBS
+```{r}
+# Calcular coeficientes de parentesco
+
+#0.5 ≈ gemelos idénticos
+#0.25 ≈ hermanos completos o padre-hijo
+#0.125 ≈ primos
+#0 ≈ no relacionados
+#Puede dar valores negativos cuando no hay relación entre muestras.
+
+
+#Crear archivo snpgdsIBDKING
+kinshipGBS<- snpgdsIBDKING(genofileGBS)
+
+kin_matrixGBSAti  <- kinshipGBS$kinship
+
+# Asignar nombres a filas y columnas (importante para identificación)
+rownames(kin_matrixGBSAti) <- colnames(kin_matrixGBSAti) <- kinshipGBS$sample.id
+
+```
+
+### Plot relatedness con ALL GBS
+
+```{r}
+
+pheatmap(kin_matrixGBSAti, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) casi Atipicos",
+         labels_row = rep("", nrow(kin_matrixGBS)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixGBS)) #Elimina las etiquetas de columnas
+         )
+```
+
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSAti, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Casi Atipicos",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas <- colnames(kin_matrixGBSAti)[p$tree_col$order]
+
+print(orden_columnas)
+```
+
+
+
+# Get vector specific for groups
+
+```{r}
+library(readr) #Leer csv
+
+#Cargar df con datos de muestras secuenciadas en GBS
+info_GBSMon <- info_GBS
+
+# Filtra las filas 
+chambers <- info_GBSMon %>%
+  filter(Treatment %in% c("contingency_ozone", "moderate_ozone", "ambient_air_IE", "purified_air", "ambient_air_SRX")) %>%
+  pull(Sample_Name_Plate)
+
+mothers <- info_GBSMon %>%
+  filter(Treatment == "actual_mother") %>%
+  pull(Sample_Name_Plate)
+
+forestRNat <- info_GBSMon %>%
+  filter(Treatment == "forest", reforested == "no") %>%
+  pull(Sample_Name_Plate)
+
+forestRef <- info_GBSMon %>%
+  filter(Treatment == "forest", reforested == "yes") %>%
+  pull(Sample_Name_Plate)
+
+Transcriptomic <- info_GBSMon %>%
+  filter(person_key_GBS == "transcriptomic") %>%
+  pull(Sample_Name_Plate)
+
+Gametophyte <- info_GBSMon %>%
+  filter(Treatment == "gametophyte") %>%
+  pull(Sample_Name_Plate)
+
+Blank <- info_GBSMon %>%
+  filter(Treatment == "blank") %>%
+  pull(Sample_Name_Plate)
+
+```
+
+# RELATEDNESS Forest RNatural y Chambers
+
+## Extraer Muestras de regeneracion Natural y las de las Camaras
+```{r}
+#Descartar muestras
+samples_to_remove <- c(forestRef, Gametophyte, Transcriptomic, Blank)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_Cham <- kin_matrixGBS[!rownames(kin_matrixGBSAti) %in% samples_to_remove, 
+                                !colnames(kin_matrixGBSAti) %in% samples_to_remove]
+```
+
+### Plot relatedness con RNatural y Chambers
+
+```{r}
+
+pheatmap(kin_matrixRNat_Cham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural y Chambers",
+         labels_row = rep("", nrow(kin_matrixRNat_Cham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_Cham)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_Cham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural y Chambers",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_Cham <- colnames(kin_matrixRNat_Cham)[p$tree_col$order]
+print(orden_columnas_RNat_Cham)
+```
+# RELATEDNESS Natural y chambers 
+##Eliminar OUTLIERS y REPLICAS
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_RNat_Cham
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_RNat_Cham[grepl("r", orden_columnas_RNat_Cham, ignore.case = TRUE)]
+print(nombres_con_r)
+
+#Descartar muestras
+samples_to_remove <- c( "H53_N6P12", "AE22_N04TAF", "I58_N12P21", "K14_NNAP5", "A115_N12P40", "D65_N7P18", "A135_N08P46", "I81_N13P29",
+                       "M2r_N5P9","CA10r_N04TAF","PP4r_NNAP1","B103r_N11P34","AMP08r_NNAPNA",
+                       "K11r_N4P1","CC26r_N04TAF","AMP05r_NNAPNA","F101r_N9P32" )
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamWO <- kin_matrixRNat_Cham[!rownames(kin_matrixRNat_Cham) %in% samples_to_remove, 
+                                !colnames(kin_matrixRNat_Cham) %in% samples_to_remove]
+
+```
+
+### Plot relatedness con RNatural y Chambers WO
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamWO, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural y Chambers WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWO)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWO)) #Elimina las etiquetas de columnas
+         )
+```
+```{r}
+
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamWO, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) GBS",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamWO <- colnames(kin_matrixRNat_ChamWO)[p$tree_col$order]
+print(orden_columnas_RNat_ChamWO)
+```
+
+#RELATENESS Reforested
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_RNat_ChamWO
+
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_forestRNat <- orden_columnas_RNat_ChamWO[!grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamWO )]
+print(nombres_con_forestRNat)
+
+#Descartar muestras
+samples_to_remove <- nombres_con_forestRNat
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamWOCham <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_ChamWO) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRNat_ChamWO) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+##Extraer orden de samples
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamWOCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Chambers",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+# Visualizar la estructura del dendrograma
+plot(p$tree_row)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamWOCham <- colnames(kin_matrixRNat_ChamWOCham)[p$tree_col$order]
+print(orden_columnas_RNat_ChamWOCham)
+```
+
+
+
+#RELATENESS forest Natural
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_RNat_ChamWO 
+
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_CCCAAEAPAX <- orden_columnas_RNat_ChamWO[grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamWO )]
+print(nombres_con_CCCAAEAPAX)
+
+#Descartar muestras
+samples_to_remove <- nombres_con_CCCAAEAPAX
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamWORNat <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_ChamWO) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRNat_ChamWO) %in% samples_to_remove]
+
+```
+
+
+### Plot relatedness ONLY chmabers
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamWORNat, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Natural",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWORNat)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWORNat)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamWORNat, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Natural",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamWORNat <- colnames(kin_matrixRNat_ChamWORNat)[p$tree_col$order]
+print(orden_columnas_RNat_ChamWORNat)
+
+```
+
+#RELATENESS ONLY chambers
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_RNat_ChamWO
+
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_forestRNat <- orden_columnas_RNat_ChamWO[!grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamWO )]
+print(nombres_con_forestRNat)
+
+#Descartar muestras
+samples_to_remove <- nombres_con_forestRNat
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamWOCham <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_ChamWO) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRNat_ChamWO) %in% samples_to_remove]
+
+```
+
+
+### Plot relatedness con ONLY Chambers 
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+##Extraer orden de samples
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamWOCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Chambers",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+# Visualizar la estructura del dendrograma
+plot(p$tree_row)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamWOCham <- colnames(kin_matrixRNat_ChamWOCham)[p$tree_col$order]
+print(orden_columnas_RNat_ChamWOCham)
+```
+
+
+
+#RELATENESS ONLY chambers con arboles potencialmente semilleros
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_RNat_ChamWO
+
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_forestRNat <- orden_columnas_RNat_ChamWO[!grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamWO )]
+print(nombres_con_forestRNat)
+
+#Descartar muestras
+samples_to_remove <- nombres_con_forestRNat
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamWOCham <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_ChamWO) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRNat_ChamWO) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+##Extraer orden de samples
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamWOCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Chambers",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+# Visualizar la estructura del dendrograma
+plot(p$tree_row)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamWOCham <- colnames(kin_matrixRNat_ChamWOCham)[p$tree_col$order]
+print(orden_columnas_RNat_ChamWOCham)
+```
+
+
+# RELATEDNESS by GENETICS GROUPS
+
+```{r}
+PWORNat<- orden_columnas_RNat_ChamWORNat
+kin_PWORNat <- kin_matrixRNat_ChamWO[PWORNat, PWORNat]
+diag_lower <- lower.tri(kin_PWORNat, diag = FALSE)
+values_lower <- kin_PWORNat[diag_lower]
+mean_kin_PWORNat <- mean(values_lower)
+mean_kin_PWORNat
+
+
+PWOCham <- orden_columnas_RNat_ChamWOCham
+kin_PWOCham <- kin_matrixRNat_ChamWO[PWOCham, PWOCham]
+diag_lower <- lower.tri(kin_PWOCham, diag = FALSE)
+values_lower <- kin_PWOCham[diag_lower]
+mean_kin_PWOCham <- mean(values_lower)
+mean_kin_PWOCham
+
+
+PWOCham_groupA<- c("AE29_N04TAF", "AX08_N04TAF", "AP16_N04TAF", "CA17_N04TAF",
+ "CA03_N04TAF", "CA04_N04TAF", "AP09_N04TAF", "CA07_N04TAF", "AE05_N04TAF", "AX19_N04TAF",
+ "AP02_N04TAF", "AP17_N04TAF", "AP30_N04TAF", "CA16_N04TAF", "AX07_N04TAF", "AX26_N04TAF",
+ "AE08_N04TAF", "AP10_N04TAF", "CC21_N04TAF", "AE14_N04TAF", "CA14_N04TAF", "AX17_N04TAF",
+ "CC29_N04TAF", "AP05_N04TAF", "AX09_N04TAF", "CC09_N04TAF", "CC17_N04TAF", "AP01_N04TAF",
+ "AE28_N04TAF", "CC27_N04TAF" 
+             )
+kin_PWOCham_groupA <- kin_matrixRNat_ChamWO[PWOCham_groupA, PWOCham_groupA]
+diag_lower <- lower.tri(kin_PWOCham_groupA, diag = FALSE)
+values_lower <- kin_PWOCham_groupA[diag_lower]
+mean_kin_PWOCham_groupA <- mean(values_lower)
+mean_kin_PWOCham_groupA
+
+
+
+PWOCham_groupB<- c("AE02_N04TAF", "AE18_N04TAF", "AE15_N04TAF", "CC13_N04TAF",
+                   "CC11_N04TAF", "AX14_N04TAF", "AE19_N04TAF", "AX15_N04TAF",
+                   "AX12_N04TAF", "AX25_N04TAF", "CA11_N04TAF", "AE25_N04TAF",
+                   "AX13_N04TAF"
+                ) 
+kin_PWOCham_groupB <- kin_matrixRNat_ChamWO[PWOCham_groupB, PWOCham_groupB]
+diag_lower <- lower.tri(kin_PWOCham_groupB, diag = FALSE)
+values_lower <- kin_PWOCham_groupB[diag_lower]
+mean_kin_PWOCham_groupB <- mean(values_lower)
+mean_kin_PWOCham_groupB
+
+
+PWOCham_groupC<- c("AX10_N04TAF", "AX21_N04TAF", "CA29_N04TAF", "CA28_N04TAF", 
+                   "CC16_N04TAF", "CC30_N04TAF", "AP27_N04TAF", "AX16_N04TAF",
+                   "AE12_N04TAF", "AP03_N04TAF", "CC20_N04TAF", "AP22_N04TAF", 
+                   "AP29_N04TAF", "CC15_N04TAF", "AE24_N04TAF", "CA19_N04TAF",
+                   "CC23_N04TAF", "AE01_N04TAF", "AX27_N04TAF" ) # Descarte la replica CC26r
+kin_PWOCham_groupC <- kin_matrixRNat_ChamWO[PWOCham_groupC, PWOCham_groupC]
+diag_lower <- lower.tri(kin_PWOCham_groupC, diag = FALSE)
+values_lower <- kin_PWOCham_groupC[diag_lower]
+mean_kin_PWOCham_groupC <- mean(values_lower)
+mean_kin_PWOCham_groupC
+
+
+PWOCham_groupD<- c("AP13_N04TAF", "CA30_N04TAF", "AP11_N04TAF", "CC26_N04TAF")
+kin_PWOCham_groupD <- kin_matrixRNat_ChamWO[PWOCham_groupD, PWOCham_groupD]
+diag_lower <- lower.tri(kin_PWOCham_groupD, diag = FALSE)
+values_lower <- kin_PWOCham_groupD[diag_lower]
+mean_kin_PWOCham_groupD <- mean(values_lower)
+mean_kin_PWOCham_groupD
+
+
+PWOCham_groupE<- c("CA18_N04TAF", "AE06_N04TAF", "AX03_N04TAF", "AP25_N04TAF",
+                "CC01_N04TAF", "CA25_N04TAF", "CC03_N04TAF", "AE10_N04TAF",
+                "AE23_N04TAF", "CA22_N04TAF", "CC07_N04TAF", "CC02_N04TAF",
+                "AP20_N04TAF", "CC10_N04TAF", "CA21_N04TAF", "AE16_N04TAF",
+                "CC24_N04TAF", "AP26_N04TAF", "CA10_N04TAF")
+kin_PWOCham_groupE <- kin_matrixRNat_ChamWO[PWOCham_groupE, PWOCham_groupE]
+diag_lower <- lower.tri(kin_PWOCham_groupE, diag = FALSE)
+values_lower <- kin_PWOCham_groupE[diag_lower]
+mean_kin_PWOCham_groupE <- mean(values_lower)
+mean_kin_PWOCham_groupE
+
+
+PWOCham_groupF<- c("AP12_N04TAF", "AX22_N04TAF", "AX28_N04TAF", "CA06_N04TAF", 
+                "CA09_N04TAF", "CA27_N04TAF", "AE13_N04TAF", "AP14_N04TAF", "AX05_N04TAF")
+kin_PWOCham_groupF <- kin_matrixRNat_ChamWO[PWOCham_groupF, PWOCham_groupF]
+diag_lower <- lower.tri(kin_PWOCham_groupF, diag = FALSE)
+values_lower <- kin_PWOCham_groupF[diag_lower]
+mean_kin_PWOCham_groupF <- mean(values_lower)
+mean_kin_PWOCham_groupF
+
+
+```
+
+
+# RELATEDNESS BACKGROUND
+```{r}
+PWOCham_groupwoA<- c(PWOCham_groupB,PWOCham_groupC,PWOCham_groupD,PWOCham_groupE,PWOCham_groupF)
+kin_PWOCham_groupwoA <- kin_matrixRNat_ChamWO[PWOCham_groupwoA, PWOCham_groupwoA]
+diag_lower <- lower.tri(kin_PWOCham_groupwoA, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoA[diag_lower]
+mean_kin_PWOCham_groupwoA <- mean(values_lower)
+mean_kin_PWOCham_groupwoA
+
+
+PWOCham_groupwoB<-  c(PWOCham_groupA,PWOCham_groupC,PWOCham_groupD,PWOCham_groupE,PWOCham_groupF)
+kin_PWOCham_groupwoB <- kin_matrixRNat_ChamWO[PWOCham_groupwoB, PWOCham_groupwoB]
+diag_lower <- lower.tri(kin_PWOCham_groupwoB, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoB[diag_lower]
+mean_kin_PWOCham_groupwoB <- mean(values_lower)
+mean_kin_PWOCham_groupwoB
+
+
+PWOCham_groupwoC<- c(PWOCham_groupA,PWOCham_groupB,PWOCham_groupD,PWOCham_groupE,PWOCham_groupF)
+kin_PWOCham_groupwoC <- kin_matrixRNat_ChamWO[PWOCham_groupwoC, PWOCham_groupwoC]
+diag_lower <- lower.tri(kin_PWOCham_groupwoC, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoC[diag_lower]
+mean_kin_PWOCham_groupwoC <- mean(values_lower)
+mean_kin_PWOCham_groupwoC
+
+
+
+PWOCham_groupwoD<-c(PWOCham_groupA,PWOCham_groupB,PWOCham_groupC,PWOCham_groupE,PWOCham_groupF)
+kin_PWOCham_groupwoD <- kin_matrixRNat_ChamWO[PWOCham_groupwoD, PWOCham_groupwoD]
+diag_lower <- lower.tri(kin_PWOCham_groupwoD, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoD[diag_lower]
+mean_kin_PWOCham_groupwoD <- mean(values_lower)
+mean_kin_PWOCham_groupwoD
+
+
+PWOCham_groupwoE <- c(PWOCham_groupA,PWOCham_groupB,PWOCham_groupC,PWOCham_groupD,PWOCham_groupF)
+kin_PWOCham_groupwoE <- kin_matrixRNat_ChamWO[PWOCham_groupwoE, PWOCham_groupwoE]
+diag_lower <- lower.tri(kin_PWOCham_groupwoE, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoE[diag_lower]
+mean_kin_PWOCham_groupwoE <- mean(values_lower)
+mean_kin_PWOCham_groupwoE
+
+PWOCham_groupwoF <- c(PWOCham_groupA,PWOCham_groupB,PWOCham_groupC,PWOCham_groupD,PWOCham_groupE)
+kin_PWOCham_groupwoF <- kin_matrixRNat_ChamWO[PWOCham_groupwoF, PWOCham_groupwoF]
+diag_lower <- lower.tri(kin_PWOCham_groupwoF, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoF[diag_lower]
+mean_kin_PWOCham_groupwoF <- mean(values_lower)
+mean_kin_PWOCham_groupwoF
+
+```
+
+
+# MAKE TABLES AND EXPORT DATA
+
+```{r}
+# Crear un data frame vacío
+df <- data.frame(ID = character(), GroupMatrix = character(), stringsAsFactors = FALSE)
+
+# Función para combinar los vectores
+combine_vectors <- function(vector, name_of_vector) {
+  data <- data.frame(ID = vector, GroupMatrix = name_of_vector, stringsAsFactors = FALSE)
+  return(data)
+}
+
+# Combinar los vectores
+df <- rbind(df, combine_vectors(PWOCham_groupA, "PWOCham_groupA"))
+df <- rbind(df, combine_vectors(PWOCham_groupB, "PWOCham_groupB"))
+df <- rbind(df, combine_vectors(PWOCham_groupC, "PWOCham_groupC"))
+df <- rbind(df, combine_vectors(PWOCham_groupD, "PWOCham_groupD"))
+df <- rbind(df, combine_vectors(PWOCham_groupE, "PWOCham_groupE"))
+df <- rbind(df, combine_vectors(PWOCham_groupF, "PWOCham_groupF"))
+
+df
+
+# Exportar el data frame a un archivo .txt
+write.table(df, file = "../metadata/df_GroupsMatrixPWOCham.txt", sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+
+
+
+
+# Crear un data frame con los nombres y valores
+df_promedios_Rel <- data.frame(
+  Group = c("mean_kin_PWOCham_groupA","mean_kin_PWOCham_groupB", "mean_kin_PWOCham_groupC", "mean_kin_PWOCham_groupD", "mean_kin_PWOCham_groupE","mean_kin_PWOCham_groupF",
+"mean_kin_PWOCham_groupwoA","mean_kin_PWOCham_groupwoB", "mean_kin_PWOCham_groupwoC", "mean_kin_PWOCham_groupwoD", "mean_kin_PWOCham_groupwoE","mean_kin_PWOCham_groupwoF",
+"mean_kin_PWORNat", "mean_kin_PWOCham"),
+  MeanRel = c(
+    mean_kin_PWOCham_groupA, mean_kin_PWOCham_groupB, mean_kin_PWOCham_groupC, mean_kin_PWOCham_groupD, 
+mean_kin_PWOCham_groupE, mean_kin_PWOCham_groupF,
+mean_kin_PWOCham_groupwoA, mean_kin_PWOCham_groupwoB, mean_kin_PWOCham_groupwoC, mean_kin_PWOCham_groupwoD, mean_kin_PWOCham_groupwoE, mean_kin_PWOCham_groupwoF,
+mean_kin_PWORNat, mean_kin_PWOCham)
+)
+
+# Exportar a un archivo txt
+write.table(df_promedios_Rel, "../metadata/promedios_RelPWOCham.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+```
+
+
+# Load filess para Anotaciones
+```{r}
+info_june <- read_excel("../metadata/Chambers_mesures_All/June.xlsx", sheet = 1)  # Usa el número o nombre de la hoja
+info_oct <- read_excel("../metadata/Chambers_mesures_All/October.xlsx", sheet = 1)  # Usa el número o nombre de la hoja
+info_ene <- read_excel("../metadata/Chambers_mesures_All/January.xlsx", sheet = 1)  # Usa el número o nombre de la hoja
+
+# Add column about damage ozone condition and dead status
+info_june$suv_damozo <- paste(info_june$survivors, info_june$ozone_damage, sep = "_")
+info_oct$suv_damozo <- paste(info_oct$survivors, info_oct$ozone_damage, sep = "_")
+info_ene$suv_damozo <- paste(info_ene$survivors, info_ene$ozone_damage, sep = "_")
+```
+
+
+## JUNIO
+```{r}
+#
+info_june$suv_damozo
+info_symtoms_june<-  info_june[, c("ID", "suv_damozo")] #Seleccionar ID y caracyter de interes a visualizar
+info_symtoms_junedf <- as.data.frame(info_symtoms_june) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_symtoms_junedf) <- info_symtoms_junedf$ID # Asegurar que los IDs sean nombres de fila
+annot_jun <- data.frame(Group = info_symtoms_junedf$suv_damozo) # Extraer la variable de interés
+rownames(annot_jun) <- rownames(info_symtoms_junedf)         # Mantener IDs de muestras
+
+colnames(annot_jun) <-"Phenotype"  # Cambia los nombres de las variables en la leyenda
+
+
+```
+
+
+## OCTUBRE Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_oct$suv_damozo
+info_symtoms_oct<-  info_oct[, c("ID", "suv_damozo")] #Seleccionar ID y caracyter de interes a visualizar
+info_symtoms_octdf <- as.data.frame(info_symtoms_oct) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_symtoms_octdf) <- info_symtoms_octdf$ID # Asegurar que los IDs sean nombres de fila
+annot_oct <- data.frame(Group = info_symtoms_octdf$suv_damozo) # Extraer la variable de interés
+rownames(annot_oct) <- rownames(info_symtoms_octdf)         # Mantener IDs de muestras
+
+colnames(annot_oct) <-"Phenotype"  # Cambia los nombres de las variables en la leyenda
+
+```
+
+
+## ENERO Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_ene$suv_damozo
+info_symtoms_ene<-  info_ene[, c("ID", "suv_damozo")] #Seleccionar ID y caracyter de interes a visualizar
+info_symtoms_enedf <- as.data.frame(info_symtoms_ene) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_symtoms_enedf) <- info_symtoms_enedf$ID # Asegurar que los IDs sean nombres de fila
+annot_ene <- data.frame(Group = info_symtoms_enedf$suv_damozo) # Extraer la variable de interés
+rownames(annot_ene) <- rownames(info_symtoms_enedf)         # Mantener IDs de muestras
+
+colnames(annot_ene) <-"Phenotype"  # Cambia los nombres de las variables en la leyenda
+
+
+```
+
+
+## CHAMBERS Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_june$chamber_number
+info_chamber<-  info_oct[, c("ID", "chamber_number")] #Seleccionar ID y caracyter de interes a visualizar
+info_chamberdf <- as.data.frame(info_chamber) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_chamberdf) <- info_chamberdf$ID # Asegurar que los IDs sean nombres de fila
+annot_cham <- data.frame(Group = info_chamberdf$chamber_number) # Extraer la variable de interés
+rownames(annot_cham) <- rownames(info_chamberdf)         # Mantener IDs de muestras
+
+colnames(annot_cham) <-"Chamber"  # Cambia los nombres de las variables en la leyenda
+
+```
+
+
+## TREATMENT Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_june$treatment
+info_treatment<-  info_oct[, c("ID", "treatment")] #Seleccionar ID y caracyter de interes a visualizar
+info_treatmentdf <- as.data.frame(info_treatment) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_treatmentdf) <- info_treatmentdf$ID # Asegurar que los IDs sean nombres de fila
+annot_treatment <- data.frame(Group = info_treatmentdf$treatment) # Extraer la variable de interés
+rownames(annot_treatment) <- rownames(info_treatmentdf)         # Mantener IDs de muestras
+
+colnames(annot_treatment) <-"Treatment"  # Cambia los nombres de las variables en la leyenda
+
+```
+
+## MIX
+
+```{r}
+#MIX JUNIO
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix <- data.frame(
+  Phenotype = annot_jun,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamWOCham)  # Número de filas en la matriz de calor
+
+```
+
+```{r}
+#MIX OCTUBRE
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix_oct <- data.frame(
+  Phenotype = annot_oct,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix_oct)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamWOCham)  # Número de filas en la matriz de calor
+
+```
+
+```{r}
+#MIX ENE
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix_ene <- data.frame(
+  Phenotype = annot_ene,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix_ene)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamWOCham)  # Número de filas en la matriz de calor
+
+```
+
+
+#PHEATMAPS
+
+```{r}
+#JUNIO
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_jun, 
+         annotation_col = annot_jun, 
+         annotation_colors = ann_colors_surv,
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham JUNIO sin outliers y sin replicas",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+
+```{r}
+#OCTUBRE
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_oct, 
+         annotation_col = annot_oct, 
+         annotation_colors = ann_colors_surv,
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham OCTUBRE sin outliers y sin replicas",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+
+
+```
+
+```{r}
+#ENERO
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_ene, 
+         annotation_col = annot_ene, 
+         annotation_colors = ann_colors_surv,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham ENERO sin outliers ni replicas",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+
+```
+
+
+
+
+```{r}
+#CHAMBERS
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_cham, 
+         annotation_col = annot_cham, 
+         annotation_colors = ann_colors_cham,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+
+
+```
+
+
+```{r}
+# TREATMENT
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_treatment, 
+         annotation_col = annot_treatment, 
+         annotation_colors = ann_colors_treatment,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham TREATMENT",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+```{r}
+#MIX JUNIO
+
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_mix, 
+         annotation_col = annot_mix, 
+         annotation_colors = ann_colors_mix,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX JUNIO",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+
+```{r}
+#MIX OCT
+
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_mix_oct, 
+         annotation_col = annot_mix_oct, 
+         annotation_colors = ann_colors_mix,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX OCT",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+
+```{r}
+#MIX ENE
+
+
+pheatmap(kin_matrixRNat_ChamWOCham, 
+         annotation_row = annot_mix_ene, 
+         annotation_col = annot_mix_ene, 
+         annotation_colors = ann_colors_mix,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX ENE",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+
+
+
+
+
+
+
+
+#LOAD LIBRARIES
+```{r}
+#Load libraries
+library(openxlsx)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(car)
+library(MASS)
+```
+
+
+```{r }
+
+
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+df_JunDel_2allAP <- df_JunDel_2Rel %>%
+  filter(treatment != "purified_air")       
+
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2allAP, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2allAP, family = Gamma(link = "log"))
+summary(model2)
+
+
+model3 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2allAP, family = Gamma(link = "log"))
+summary(model3)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3)
+
+
+```
+
+
+
+
+# Plot modelo per RELATEDNESS/DeltaAltura P3
+
+
+
+```{r }
+
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrix.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+df_GroupsMatrixP3 <- df %>% filter(GroupMatrix %in% c("P3_groupA", "P3_groupB", "P3_groupC", "P3_groupD"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixP3[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% 
+  filter(!treatment %in% c( "ambient_air_SRX"))%>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+
+ggplot(df_JunDel_2Rel, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# Plot modelo per RELATEDNESS/DeltaAltura P4
+
+```{r }
+
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrix.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+df_GroupsMatrixP4 <- df %>% filter(GroupMatrix %in% c("P4_groupA", "P4_groupB", "P4_groupC", "P4_groupD", "P4_groupE"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixP4[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% 
+  filter(!treatment %in% c( "ambient_air_SRX")) %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+ggplot(df_JunDel_2Rel, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+# Plot modelo per RELATEDNESS/DeltaAltura P4 y grupo de P3
+
+```{r }
+
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrix.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+df_GroupsMatrixPmix <- df %>% filter(GroupMatrix %in% c("P4_groupA", "P4_groupB", "P4_groupC", "P4_groupD", "P4_groupE",  "P3_groupC"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixPmix[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+df_JunDel_2Rel$GroupMatrix
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+df_JunDel_2Rel_filtrado <- df_JunDel_2Rel %>%
+  filter(GroupMatrix != "No_sequenced") %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+df_JunDel_2Rel_filtrado <- df_JunDel_2Rel_filtrado %>%
+  mutate(GroupMatrix = case_when(
+    GroupMatrix %in% c("P3_groupC", "P4_groupD") ~ "P4DyP3C",
+    TRUE ~ GroupMatrix  # Mantiene los demás valores sin cambios
+  ))
+
+
+
+ggplot(df_JunDel_2Rel_filtrado, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrixMix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-Groupmix.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+
+# Plot samples RELATEDNESS/DeltaAltura P3yP4 same assambly
+
+```{r }
+#Load data Grupos Geneticos
+df_GroupsMatrix <- read.table("../metadata/df_GroupsMatrixP3y4.txt", header = TRUE, sep = "", stringsAsFactors = FALSE)
+
+df_GroupsMatrixPmix <- df_GroupsMatrix %>% filter(GroupMatrix %in% c("P3y4_groupA", "P3y4_groupB", "P3y4_groupC", "P3y4_groupD", "P3y4_groupE", "P3y4_groupF"))
+
+df_JunDel_2Rel <- df_JunDel_2
+
+# Unir df_Jun con Matrix usando la columna ID
+df_JunDel_2Rel <- merge(df_JunDel_2Rel, df_GroupsMatrixPmix[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_JunDel_2Rel$GroupMatrix[is.na(df_JunDel_2Rel$GroupMatrix)] <- "No_sequenced"
+
+
+# df_JunDel_2Rel <- df_JunDel_2Rel %>%
+#  mutate(
+ #   GroupMatrix = case_when(
+  #    is.na(GroupMatrix) & treatment == "purified_air" ~ "Dosis_purified_air",
+   #   is.na(GroupMatrix) & treatment != "purified_air" ~ "No_sequenced",
+    #  TRUE ~ GroupMatrix  # Mantiene los valores originales si no se cumplen las condiciones
+    #)
+  #)
+
+
+# Ver el resultado
+head(df_JunDel_2Rel)
+
+```
+
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_JunDel_2Rel <- df_JunDel_2Rel %>% filter(!treatment %in% c( "ambient_air_SRX"))
+
+df_JunDel_2Rel$GroupMatrix
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+df_JunDel_2Rel_filtrado <- df_JunDel_2Rel %>%
+  filter(!GroupMatrix %in% c("No_sequenced", "P3y4_groupF")) %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+
+ggplot(df_JunDel_2Rel_filtrado, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM","ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_x_discrete(labels = c("0" = "Assymptomatic", "1" = "Symptomatic")) +  # Cambiar etiquetas del eje X
+  scale_shape_manual(values = shape_GroupsMatrixP3y4) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = "none" ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 25),   # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_per_ozone-damage-treatment-GroupP3y4.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+
+## Plot samples RELATEDNESS/Clorofila P3yP4 same assambly
+
+
+```{r }
+
+df_mergeRel<- df_merge
+
+# Unir df_Jun con Matrix usando la columna ID
+df_mergeRel <- merge(df_mergeRel, df_GroupsMatrixPmix[, c("ID", "GroupMatrix")], by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone"
+df_mergeRel$GroupMatrix[is.na(df_mergeRel$GroupMatrix)] <- "No_sequenced"
+
+# Ver el resultado
+head(df_mergeRel)
+
+```
+
+```{r }
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+#df_mergeRel_filtrado <- df_mergeRel %>%
+ # filter(GroupMatrix != "No_sequenced") %>%  # Filtrar antes de eliminar duplicados
+  #distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+df_mergeRel_filtrado <- df_mergeRel %>%
+  filter(!GroupMatrix %in% c("No_sequenced", "P3y4_groupF")) %>%  # Filtrar antes de eliminar duplicados
+  distinct(ID, .keep_all = TRUE)  # Mantiene la primera ocurrencia y elimina duplicados
+
+
+
+df_mergeRel_filtrado <- df_mergeRel_filtrado %>%
+  mutate(GroupMatrix = case_when(
+    GroupMatrix %in% c("P3_groupC", "P4_groupD") ~ "P4DyP3C",
+    TRUE ~ GroupMatrix  # Mantiene los demás valores sin cambios
+  ))
+
+
+ggplot(df_mergeRel_filtrado, aes(x = as.factor(ozone_damage), y = Promedio_Clorofila, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM", "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "",
+       y = "Total Chlorophyll (mg/g)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_x_discrete(labels = c("0" = "Assymptomatic", "1" = "Symptomatic")) +  # Cambiar etiquetas del eje X
+  scale_shape_manual(values = shape_GroupsMatrixP3y4) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = "none" ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 25), # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/model_Cloro_P3y4.png", width = 16, height = 10, dpi = 600)
+
+```
+# Modelo
+
+```{r }
+
+# Load data
+#df_merge_2 <- df_merge %>% filter(!treatment %in% c("ambient_air_SRX"))
+
+#¿Que distribución tienen mis datos?
+
+# Histograma
+hist(df_JunDel_2Rel_filtrado$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+summary(df_JunDel_2Rel_filtrado$delta_altura)
+
+
+
+shapiro_test <- shapiro.test(df_JunDel_2Rel_filtrado$delta_altura)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Borrar
+rm(shapiro_test)
+
+hist(log(df_JunDel_2Rel_filtrado$delta_altura), main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+
+
+
+
+
+# Histograma
+hist(df_mergeRel_filtradoSRX$Promedio_Clorofila, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+summary(df_mergeRel_filtradoSRX$Promedio_Clorofila)
+
+
+
+shapiro_test <- shapiro.test(df_mergeRel_filtradoSRX$Promedio_Clorofila)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Los datos tienen distribucion normal 
+```
+
+
+```{r }
+
+
+df_mergeRel_filtradoSRX <- df_mergeRel_filtrado %>% filter(treatment != "ambient_air_SRX")
+
+df_mergeRel_filtradoSRX$GroupMatrix
+
+df_mergeRel_filtradoSRX$treatment <- droplevels(df_mergeRel_filtradoSRX$treatment)
+
+df_mergeRel_filtradoSRX <- df_mergeRel_filtrado %>% filter(ID != c("AE22_N04TAF", "AP12_N04TAF"))
+                                                           
+
+
+```
+#Modelo delta Altura 
+
+
+```{r }
+
+model1_gamma <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+model1_gaussian <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtrado, family = gaussian(link = "identity"))
+
+# Comparar AIC de los modelos
+AIC(model1_gamma, model1_gaussian)
+```
+
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+het_dataNSGG4AP$ozone_damage <- factor(het_dataNSGG4AP$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "Heterocigosity", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+
+```{r }
+
+
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+      
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glm(delta_altura ~ ozone_damage +  GroupMatrix, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glm(delta_altura ~ ozone_damage + treatment + GroupMatrix, data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model5)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|treatment) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model5)
+
+
+model6 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model6)
+
+
+model7 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix/treatment) , data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix), data = df_JunDel_2Rel_filtrado, family = Gamma(link = "log"))
+summary(model8)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8)
+
+
+```
+
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+df_JunDel_2Rel_filtradoAP <- df_JunDel_2Rel_filtrado %>%
+  filter(treatment != "purified_air")                             
+
+hist(df_JunDel_2Rel_filtradoAP$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+      
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glm(delta_altura ~ ozone_damage +  GroupMatrix, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glm(delta_altura ~ ozone_damage + treatment + GroupMatrix, data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model5)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model5)
+
+
+model6 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model6)
+
+
+model7 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix/treatment) , data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix), data = df_JunDel_2Rel_filtradoAP, family = Gamma(link = "log"))
+summary(model8)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8)
+
+```
+
+
+
+
+
+#CLOROFILA
+
+```{r }
+library(lme4)
+library(lmerTest)
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+model1 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix), data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix), data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glmer(Promedio_Clorofila~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix/chamber_number) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model4)
+
+# Creo es el mejor
+model5 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix/chamber_number) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model5)
+
+model6 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix/chamber_number) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model6)
+
+model7 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix/treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix/treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model8)
+
+# Segundo mejor
+model9 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix/treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model9)
+
+model10 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) + (1|treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model10)
+
+model11 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|GroupMatrix) + (1|treatment) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model11)
+
+model12 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + GroupMatrix + (1|treatment/GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model12)
+
+model13 <- glmer(Promedio_Clorofila ~ ozone_damage + GroupMatrix + (1|treatment/GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model13)
+
+# Segundo mejor
+model14 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|treatment/GroupMatrix) , data = df_mergeRel_filtradoSRX, family = Gamma(link = "log"))
+summary(model14)
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8, model9, model10, model11, model12, model13, model14)
+
+# Summaries
+summary(model1)
+summary(model2)
+summary(model3)
+summary(model4)
+summary(model5) 
+summary(model6)
+summary(model7)
+summary(model8) 
+summary(model9)
+summary(model10) 
+summary(model11)
+summary(model12)
+summary(model13) 
+summary(model14)
+
+
+```
+
+# Calcular HETEROCIGOSIDAD
+
+
+```{r }
+# Leer el archivo .het
+het_data <- read.table("../metadata/heterocigosidad.het", header = TRUE)
+
+# Cambiar el nombre de la columna 'IND' por 'ID'
+colnames(het_data)[colnames(het_data) == "INDV"] <- "ID"
+
+# Verificar que se cambió el nombre
+head(het_data)
+
+
+# Calcular la heterocigosidad observada
+het_data$H_obs <- 1 - (het_data$O.HOM / het_data$N_SITES)
+
+# Ver los resultados
+head(het_data)
+
+```
+
+
+```{r }
+# Calcular la heterocigosidad observada
+het_data$H_obs <- 1 - (het_data$O.HOM / het_data$N_SITES)
+
+# Ver los resultados
+head(het_data)
+
+```
+
+
+```{r }
+# Histograma de la heterocigosidad observada
+hist(het_data$H_obs, 
+     main = "Distribución deHeterocigosidad por Individuo de Seq y No Seq de 4 tratamientos", 
+     xlab = "Heterocigosidad Observada", 
+     col = "lightblue", 
+     border = "blue")
+```
+
+
+```{r }
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(het_data$H_obs, 
+     main = "Heterocigosidad por Individuo de Seq y No Seq de 4 tratamientos", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+```{r }
+summary(het_data$H_obs)
+```
+
+```{r }
+
+# Combinar el DataFrame de heterocigosidad con el DataFrame de fenotipos
+het_data <- merge(het_data, df_JunDel_2Rel, by = "ID")
+
+# Ver los primeros registros del DataFrame combinado
+head(het_data)
+
+
+het_dataNSGG4 <- het_data %>%
+  filter(GroupMatrix != "No_sequenced" & GroupMatrix != "P3y4_groupF")
+
+```
+
+
+```{r }
+# Graficar la heterocigosidad observada por fenotipo
+boxplot(H_obs ~ ozone_damage, data = het_dataNSGG4, 
+        main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos con AP", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+
+```{r }
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(het_dataNSGG4$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos con AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+```{r }
+
+
+het_dataNSGG4AP <- het_data %>%
+  filter(GroupMatrix != "No_sequenced" & 
+         GroupMatrix != "P3y4_groupF" & 
+         treatment != "purified_air")
+
+# Verificar el resultado
+head(het_dataNSGG4AP)
+
+```
+
+
+```{r }
+# Graficar la heterocigosidad observada por fenotipo
+boxplot(H_obs ~ ozone_damage, data = het_dataNSGG4AP, 
+        main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+```{r }
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(het_dataNSGG4AP$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+```{r }
+# Graficar la heterocigosidad observada por Grupo Genetico
+boxplot(H_obs ~ GroupMatrix, data = het_dataNSGG4AP, 
+        main = "Heterocigosidad Observada por Grupo Genetico", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+
+
+```{r }
+
+# Crear un vector de colores según el fenotipo o grupo
+colores <- as.factor(het_dataNSGG4AP$ozone_damage)  # o 'fenotipo', si es la columna que tienes
+
+# Graficar, usando colores distintos para cada grupo
+plot(het_dataNSGG4AP$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = colores)
+
+
+```
+
+
+# Modelo considerando HETEROCIGOSIDAD
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+# Prueba con distintas familias
+fig_gaussian <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = gaussian(link = "identity")), fullrange = TRUE) +
+  labs(title = "GLM con Gaussian", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+fig_gamma <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), fullrange = TRUE) +
+  labs(title = "GLM con Gamma", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+fig_inverse_gaussian <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = inverse.gaussian(link = "log")), fullrange = TRUE) +
+  labs(title = "GLM con Inverse Gaussian", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+# Mostrar los gráficos
+print(fig_gaussian)
+print(fig_gamma)
+print(fig_inverse_gaussian)
+
+
+model_gaussian <- glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = gaussian(link = "identity"))
+model_gamma <- glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+model_inverse_gaussian <- glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = inverse.gaussian(link = "log"))
+
+# Comparar AIC de los modelos
+AIC(model_gaussian, model_gamma, model_inverse_gaussian)
+
+```
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+het_dataNSGG4AP$ozone_damage <- factor(het_dataNSGG4AP$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(het_dataNSGG4AP, aes(x = H_obs, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "Heterocigosity", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+
+```{r }
+# Model all independent variables WITH health status interaction 
+
+
+glm_1<-glm(delta_altura ~ H_obs, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_1)
+
+
+glm_2<-glm(delta_altura ~ H_obs + ozone_damage, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_2)
+
+
+
+glm_3<-glm(delta_altura ~ H_obs + treatment, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_3)
+
+
+
+glm_4<-glm(delta_altura ~ H_obs + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_4)
+
+
+glm_5<-glm(delta_altura ~ H_obs + treatment + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_5)
+
+glm_6<-glm(delta_altura ~ H_obs + ozone_damage + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_6)
+
+
+glm_7<-glm(delta_altura ~ H_obs + ozone_damage + treatment, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_7)
+
+
+glm_8<-glm(delta_altura ~ H_obs + ozone_damage + treatment + GroupMatrix, data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_8)
+
+
+glm_9<-glmer(delta_altura ~ H_obs + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_9)
+
+
+glm_10<-glmer(delta_altura ~ H_obs + ozone_damage + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_10)
+
+
+
+glm_11<-glmer(delta_altura ~ H_obs + treatment + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_11)
+
+
+
+glm_12<-glmer(delta_altura ~ H_obs + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_12)
+
+
+glm_13<-glmer(delta_altura ~ H_obs + treatment + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_13)
+
+glm_14<-glmer(delta_altura ~ H_obs + ozone_damage + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_14)
+
+
+glm_15<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_15)
+
+
+
+glm_16<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + GroupMatrix + (1|GroupMatrix), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_16)
+
+
+glm_17<-glmer(delta_altura ~ H_obs + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_17)
+
+
+glm_18<-glmer(delta_altura ~ H_obs + ozone_damage + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_18)
+
+glm_19<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_19)
+
+glm_20<-glmer(delta_altura ~ H_obs + ozone_damage + GroupMatrix + (1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_20)
+
+glm_21<-glmer(delta_altura ~ H_obs + ozone_damage + treatment+  GroupMatrix +(1|GroupMatrix/treatment), data = het_dataNSGG4AP, family = Gamma(link = "log"))
+summary(glm_21)
+
+# Comparar los AIC de los dos modelos
+AIC(glm_1, glm_2, glm_3, glm_4, glm_5,
+    glm_6, glm_7, glm_8, glm_9, glm_10,
+    glm_11, glm_12, glm_13, glm_14, glm_15,
+    glm_16, glm_17, glm_18, glm_19, glm_20,
+    glm_21)
+
+
+```
+
+
+```{r }
+
+```
+
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+df_JunDel_2Rel_filtradoAP <- df_JunDel_2Rel_filtrado %>%
+  filter(treatment != "purified_air")                             
+
+hist(df_JunDel_2Rel_filtradoAP$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+      
+model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model2)
+
+model3 <- glm(delta_altura ~ ozone_damage +  GroupMatrix, data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model3)
+
+#model4 <- glm(delta_altura ~ ozone_damage + treatment + GroupMatrix, data = #df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+#summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model5)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + GroupMatrix + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model5)
+
+
+model6 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model6)
+
+
+model7 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix/treatment) , data = df_JunDel_2Rel_filtradoAP, family = inverse.gaussian(link = "log"))
+summary(model7)
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model5, model6, model7)
+
+# Summaries
+summary(model1)
+summary(model2)
+summary(model3)
+#summary(model4)
+summary(model5) 
+summary(model6)
+summary(model7)
+
+
+
+```
+
+
