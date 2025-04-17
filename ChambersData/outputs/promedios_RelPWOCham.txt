@@ -1,0 +1,12 @@
+Group	MeanRel
+mean_kin_PWOCham_groupA	0.111948841609392
+mean_kin_PWOCham_groupB	0.116533378304384
+mean_kin_PWOCham_groupC	0.116341562798608
+mean_kin_PWOCham_groupD	0.104567696055714
+mean_kin_PWOCham_groupE	0.101724636037915
+mean_kin_filtr_background	-0.0328458962957097
+mean_kin_Groups_ABCDE	0.0118749287660718
+mean_kin_PWOCham	0.00330148262720214
+mean_kin_PWOAllForest	-0.040292250116569
+mean_kin_PWForestRNat	-0.036101119968144
+mean_kin_PWOForestRef	-0.0521882896598138

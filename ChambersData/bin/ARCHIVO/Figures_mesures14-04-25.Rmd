@@ -26,8 +26,6 @@ library(MASS)
 ```
 
 # INFO
-
-## Load color and statistical comparations 
 ```{r }
 
 my_comparisons <- list(c("ambient_air_SRX", "ambient_air_IE"), c("ambient_air_SRX", "purified_air"), c("ambient_air_SRX", "ozone_moderate"), c("ambient_air_SRX", "ozone_contingency"), c("ambient_air_IE", "purified_air"), c("ambient_air_IE", "ozone_moderate"), c("ambient_air_IE", "ozone_contingency"), c("purified_air", "ozone_moderate"),c("purified_air", "ozone_contingency"),c("ozone_moderate", "ozone_contingency"))
@@ -82,6 +80,18 @@ shape_triplicates<- c("1"=20, "2"=2,"3"=4)
 shape_ozone<- c("1"=20, "0"=17)
 
 shape_bud<- c("bud"=19, "growing"=4, "dead"=2)
+
+
+shape_GroupsMatrixP3y4<- c(
+                       "P3y4_groupA" =15, # cuadrado negro
+                       "P3y4_groupB" =1, # circulo vacio
+                       "P3y4_groupC" =2, # triangulo vacio punta arriba
+                       "P3y4_groupD"=6,  # triangulo vacio punta abajo
+                       "P3y4_groupE" =17, # triangulo negro punta arriba
+                       "P3y4_groupF" =8, # asterisco # estrella david 
+                       "No_sequenced" =11
+                       )
+
 
 ```
 
@@ -1019,30 +1029,3 @@ ggplot(df_JunDeltas_2, aes(x = treatment, y = delta_altura, shape = as.factor(oz
 ggsave("../outputs/model_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
 
 ```
-
-# Modelo delta_altura, ozone_damage,  treatment, (ONLY samples que tienen estos datos descartando AX)
-
-```{r }
-
-df_JunDeltas_2AX <-  df_JunDeltas_2
-df_JunDeltas_2AX$treatment  <- factor(df_JunDeltas_2$treatment, levels = c("purified_air", "ambient_air_IE", "ozone_moderate", "ozone_contingency")
-)
-model1 <- glm(delta_altura ~ ozone_damage, data = df_JunDeltas_2AX, family = Gamma(link = "log"))
-summary(model1)
-
-model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_JunDeltas_2AX, family = Gamma(link = "log"))
-summary(model2)
-
-
-model3 <- glm(delta_altura ~ ozone_damage * treatment, data = df_JunDeltas_2AX, family = Gamma(link = "log"))
-summary(model3)
-
-
-
-# Comparar los AIC de los dos modelos
-AIC(model1, model2, model3)
-
-
-```
-
-

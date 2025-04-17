@@ -1,0 +1,1045 @@
+---
+title: "Models"
+author: "Vero"
+date: "7/04/2025"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
+---
+
+
+#LOAD LIBRARIES
+```{r}
+#Load libraries
+library(openxlsx)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(car)
+library(MASS)
+library(lme4)
+
+```
+
+# Load labels and colors
+
+```{r }
+
+my_comparisons <- list(c("ambient_air_SRX", "ambient_air_IE"), c("ambient_air_SRX", "purified_air"), c("ambient_air_SRX", "ozone_moderate"), c("ambient_air_SRX", "ozone_contingency"), c("ambient_air_IE", "purified_air"), c("ambient_air_IE", "ozone_moderate"), c("ambient_air_IE", "ozone_contingency"), c("purified_air", "ozone_moderate"),c("purified_air", "ozone_contingency"),c("ozone_moderate", "ozone_contingency"))
+
+labels_ALL <- c( "nursery","purified air","ambient air UNAM", 
+  "moderate","contingency"
+)
+
+
+labels_woSRX <- c(
+  purified_air = "purified air",
+  ambient_air_IE = "ambient air UNAM",
+  ozone_moderate = "moderate",
+  ozone_contingency = "contingency"
+  
+)
+
+#d3453a: Un rojo intenso.
+#bcb635: Un amarillo verdoso, similar al color mostaza.
+#48b1da: Un azul claro o azul celeste.
+#5cc051: Un verde brillante.
+#697329: Un verde oliva o un verde oscuro.
+colors_ALL <- c("#697329", "#48b1da", "#5cc051", "#bcb635", "#d3453a" )
+
+colors_woSRX <- c("#48b1da", "#5cc051",  "#bcb635", "#d3453a" )
+
+colors_ozoned <- c( "#5cc051",  "#bcb635", "#d3453a" )
+
+colors_relatedness <- c("#688ccd",
+"#69b44c","#7962cb","#c4aa42","#c163ba","#4bb193","#d04c41","#6e7f38","#c75980","#c27945")
+
+#Number of chambers and treatments
+# Chambers ambient_air_IE == 7,14,15    
+# Chambers ambient_air_SRX == 1,2,3 
+# Chambers purified_air== 4,8,9 
+# Chambers ozone_moderate== 5,10,11
+# Chambers ozone_contingency== 6,12,13 
+
+#Shape 19: Círculo sólido.
+#Shape 2: Triángulo apuntando hacia arriba (hueco).
+#Shape 4: Cruz.
+
+shape_chambers<- c("1"=20, "2"=2,"3"=4, #ambient_air_SRX
+                   "7"=20, "14"=2,"15"=4, #ambient_air_IE
+                   "4"=20, "8"=2,"9"=4, #purified_air
+                   "5"=20, "10"=2,"11"=4, #ozone_moderate
+                   "6"=20, "12"=2,"13"=4 #ozone_contingency
+                   )
+
+shape_triplicates<- c("1"=20, "2"=2,"3"=4)
+
+shape_ozone<- c("1"=20, "0"=17)
+
+shape_bud<- c("bud"=19, "growing"=4, "dead"=2)
+
+shape_GroupsMatrix<- c("P3_groupA" =15, # cuadrado negro
+                       "P3_groupB" =16, # circulo negro
+                       "P3_groupC" =17, # triangulo negro punta arriba
+                       "P3_groupD"=8, # asterisco
+                       "P3_groupE" =3, # simbolo mas
+                       "P4_groupA" =0, #cuadrado vacio
+                       "P4_groupB" =1, # circulo vacio
+                       "P4_groupC" =2, # triangulo vacio punta arriba
+                       "P4_groupD"=6,  # triangulo vacio punta abajo
+                       "P4_groupE" =7, # cuadrado con cruz adentro
+                       "No_sequenced" =10, # circulo con simbolo de mas
+                       "Dosis_purified_air"= 11) # estrella david 
+
+
+shape_GroupsMatrixMix<- c(
+                       "PWOCham_groupA" =15, # cuadrado negro
+                       "PWOCham_groupB"  =16, # circulo negro
+                       "PWOCham_groupC"=17, # triangulo negro punta arriba
+                       "PWOCham_groupD" =2, # triangulo vacio punta arriba
+                       "PWOCham_groupE" =0, #cuadrado vacio
+                       "No_sequencedORagruped" =8 # asterisco # estrella david 
+                       )
+
+
+
+```
+
+```{r }
+
+# Leer archivo deltas, clorofila y survive
+df_mergeChloro_suvdamozo<- read.csv("../../ChambersData/outputs/df_mergeChloro_suvdamozo.csv")
+
+# Leer el archivo .txt con los grupos familiares
+GeneticsGroups <- read.table("../outputs/df_GroupsMatrixPWOCham.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE)
+
+
+```
+
+# Crear dataframes con informacion merge
+
+```{r }
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+# Merge info de las dos tablas, Genetic Groups al df
+df_mergeChloro_suv_GenGro <- merge(df_mergeChloro_suvdamozo, GeneticsGroups, by = "ID", all.x = TRUE)
+
+# Reemplazar los valores NA con "No_exposed_ozone", Si tenian NA es porque no fureon secuenciados por eso hay que especificarlo en la df
+df_mergeChloro_suv_GenGro$GroupMatrix[is.na(df_mergeChloro_suv_GenGro$GroupMatrix)] <- "No_sequencedORagruped"
+
+#Exportar info 
+write.csv(df_mergeChloro_suv_GenGro, "../outputs/df_mergeChloro_suv_GenGro.csv", row.names = FALSE)
+
+#Descartar muestras "No_sequencedORagruped"
+df_mergeChloro_suv_GenGrofiltred <- df_mergeChloro_suv_GenGro %>%
+  filter(GroupMatrix != "No_sequencedORagruped")
+
+# Crear df sin muestras AP y AX
+
+df_mergeChloro_suv_GenGrofiltredwoAPAX <- df_mergeChloro_suv_GenGrofiltred %>%
+  filter(treatment != "purified_air" & treatment != "ambient_air_SRX")
+
+# Crear df sin muestras AP
+
+df_mergeChloro_suv_GenGrofiltredwoAP <- df_mergeChloro_suv_GenGrofiltred %>%
+  filter(treatment != "purified_air")
+
+# Crear df sin muestras AX
+
+df_mergeChloro_suv_GenGrofiltredAX <- df_mergeChloro_suv_GenGrofiltred %>%
+  filter(treatment != "ambient_air_SRX")
+
+
+```
+
+# Modelo delta_altura, ozone_damage,  treatment, GroupMatrix (ONLY samples que tienen estos datos descartando APAX)
+
+```{r }
+
+model1 <- glm(delta_altura ~ ozone_damage, data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model2)
+
+
+model3 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model3)
+
+
+model4 <- glm(delta_altura ~ ozone_damage + GroupMatrix, data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix) , data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model5)
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5)
+
+# Conclusión: 
+## El Grupo Genetico al que pertenecen no es significativo para explicar el crecimiento del arbol
+## Parece que el crecimiento se explica por el fenotipo y la dosis de ozono. 
+## Mejor modelo model2 considerando muestras que tienen datos de: delta_altura, ozone_damage,  treatment, GroupMatrix
+
+# Siguiente paso
+## Crear un modelo que descarte el grupo genético al que pertenecen
+
+```
+## Plot modelo
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+
+df_mergeChloro_suv_GenGrofiltredwoAPAX$treatment <- factor(df_mergeChloro_suv_GenGrofiltredwoAPAX$treatment, levels = c("ambient_air_IE", "ozone_moderate", "ozone_contingency")
+)
+
+
+ggplot(df_mergeChloro_suv_GenGrofiltredwoAPAX, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c( "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrixMix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/Figures/model_per_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+
+
+# Modelo delta_altura, ozone_damage,  treatment, GroupMatrix (ONLY samples que tienen estos datos descartando APAX)
+
+```{r }
+
+model1 <- glm(delta_altura ~ ozone_damage, data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model2)
+
+
+model3 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model3)
+
+
+model4 <- glm(delta_altura ~ ozone_damage + GroupMatrix, data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model4)
+
+model5 <- glmer(delta_altura ~ ozone_damage + treatment + (1|GroupMatrix) , data = df_mergeChloro_suv_GenGrofiltredwoAPAX, family = Gamma(link = "log"))
+summary(model5)
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5)
+
+# Conclusión: 
+## El Grupo Genetico al que pertenecen no es significativo para explicar el crecimiento del arbol
+## Parece que el crecimiento se explica por el fenotipo y la dosis de ozono. 
+## Mejor modelo model2 considerando muestras que tienen datos de: delta_altura, ozone_damage,  treatment, GroupMatrix
+
+# Siguiente paso
+## Crear un modelo que descarte el grupo genético al que pertenecen
+
+```
+## Plot modelo
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+
+df_mergeChloro_suv_GenGrofiltredwoAPAX$treatment <- factor(df_mergeChloro_suv_GenGrofiltredwoAPAX$treatment, levels = c("ambient_air_IE", "ozone_moderate", "ozone_contingency")
+)
+
+
+ggplot(df_mergeChloro_suv_GenGrofiltredwoAPAX, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c( "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_shape_manual(values = shape_GroupsMatrixMix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/Figures/model_per_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+
+
+# Modelo delta_altura, ozone_damage,  treatment (ONLY samples que tienen estos datos descartando APAX)
+
+```{r }
+
+# Descartar muestras de tratamientos AX y AP
+df_mergeChloro_suv_GenGroAPAX <- df_mergeChloro_suv_GenGro %>%
+  filter(treatment != "purified_air" & treatment != "ambient_air_SRX")
+
+model1 <- glm(delta_altura ~ ozone_damage, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(delta_altura ~ ozone_damage + treatment, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model2)
+
+
+model3 <- glmer(delta_altura ~ ozone_damage + treatment  + (1|treatment) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model3)
+
+
+model4 <- glm(delta_altura ~ ozone_damage * treatment, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model4)
+
+
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4)
+
+# Conclusión: 
+## El crecimiento se explica por el fenotipo y la dosis de ozono (Contingencia). 
+## Mejor modelo model2 considerando muestras que tienen datos de: delta_altura, ozone_damage,  treatment
+summary(model2)
+
+# Siguiente paso
+
+```
+## Plot modelo
+
+```{r }
+
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+df_mergeChloro_suv_GenGroAPAX$treatment <- factor(df_mergeChloro_suv_GenGroAPAX$treatment, levels = c("ambient_air_IE", "ozone_moderate", "ozone_contingency")
+)
+
+
+
+ggplot(df_mergeChloro_suv_GenGroAPAX, aes(x = as.factor(ozone_damage), y = delta_altura, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c( "ambient_air_IE" = "ambient air UNAM",
+                      "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "Condition after treatment",
+       y = "Δ height (cm)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  guides(fill = guide_legend(title = "Condition after treatment") ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_blank(),  # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/Figures/model_per_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+## Plot samples RELATEDNESS/Clorofila
+
+
+```{r }
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+
+
+
+ggplot(df_mergeChloro_suv_GenGroAPAX, aes(x = as.factor(ozone_damage), y = Promedio_Clorofila, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(aes(shape = as.factor(GroupMatrix)),  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM", "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "",
+       y = "Total Chlorophyll (mg/g)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_x_discrete(labels = c("0" = "Assymptomatic", "1" = "Symptomatic")) +  # Cambiar etiquetas del eje X
+  scale_shape_manual(values = shape_GroupsMatrixMix) +  # Formas para GroupMatrix
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = "none" ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 25), # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/Figures/model_Cloro_ozone-damage-treatment-Group.png", width = 16, height = 10, dpi = 600)
+
+```
+# Modelo
+
+```{r }
+
+# Load data
+#df_merge_2 <- df_merge %>% filter(!treatment %in% c("ambient_air_SRX"))
+
+#¿Que distribución tienen mis datos?
+
+# Histograma
+hist(df_mergeChloro_suv_GenGroAPAX$delta_altura, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+summary(df_mergeChloro_suv_GenGroAPAX$delta_altura)
+
+
+
+shapiro_test <- shapiro.test(df_mergeChloro_suv_GenGroAPAX$delta_altura)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Borrar
+rm(shapiro_test)
+
+hist(log(df_mergeChloro_suv_GenGroAPAX$delta_altura), main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+
+
+
+```
+
+
+```{r }
+
+# Histograma
+hist(df_mergeChloro_suv_GenGroAPAX$Promedio_Clorofila, main="Histograma", xlab="Valores", col="lightblue", border="black")
+
+summary(df_mergeChloro_suv_GenGroAPAX$Promedio_Clorofila)
+
+
+
+shapiro_test <- shapiro.test(df_mergeChloro_suv_GenGroAPAX$Promedio_Clorofila)
+print(shapiro_test)
+
+#Dado que el p-value es menor que 0.05, se rechaza la hipótesis nula. Esto significa que hay evidencia estadística suficiente para concluir que los datos no siguen una distribución normal
+
+#Los datos tienen distribucion normal 
+```
+
+
+#CLOROFILA
+
+```{r }
+library(lme4)
+library(lmerTest)
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos (con cola a la derecha).
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+model1 <- glm(Promedio_Clorofila ~ ozone_damage, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model1)
+
+model2 <- glm(Promedio_Clorofila ~ ozone_damage + treatment, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model2)
+
+model3 <- glm(Promedio_Clorofila ~ ozone_damage + GroupMatrix, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model3)
+
+model4 <- glmer(Promedio_Clorofila~ ozone_damage + treatment + GroupMatrix + (1|GroupMatrix) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model4)
+
+# Creo es el mejor
+model5 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + (1|treatment), data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model5)
+
+model6 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|treatment) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model6)
+
+model7 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model7)
+
+model8 <- glmer(Promedio_Clorofila ~ ozone_damage + treatment + (1|GroupMatrix) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model8)
+
+model9 <- glmer(Promedio_Clorofila ~ ozone_damage + (1|GroupMatrix/treatment) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model9)
+
+
+model10<- glmer(Promedio_Clorofila ~ ozone_damage + (1|treatment/GroupMatrix) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model10)
+
+
+model11<- glm(Promedio_Clorofila ~ treatment, data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model11)
+
+model12 <- glmer(Promedio_Clorofila ~ ozone_damage * treatment + (1|GroupMatrix) , data = df_mergeChloro_suv_GenGroAPAX, family = Gamma(link = "log"))
+summary(model12)
+
+# Comparar los AIC de los dos modelos
+AIC(model1, model2, model3, model4, model5, model6, model7, model8, model9, model10, model11)
+
+# Summaries
+summary(model1)
+summary(model2)
+summary(model3)
+summary(model4)
+summary(model5) 
+summary(model6)
+summary(model7)
+summary(model8) 
+summary(model9)
+summary(model10) 
+summary(model11)
+
+
+
+```
+
+```{r }
+stat_box_data <- function(y) {
+  return( 
+    data.frame(
+      y = 0.5+1.1*max(y),  
+      label = paste('n =', length(y))
+    )
+  )
+}
+
+
+# Filtrar el data frame para eliminar las filas con "No_sequenced" en GroupMatrix
+# Eliminar duplicados basados en la columna ID
+
+
+
+
+ggplot(df_mergeChloro_suv_GenGroAPAX, aes(x = as.factor(ozone_damage), y = Promedio_Clorofila, 
+                           fill = as.factor(ozone_damage))) +  # Diferenciar boxplots por síntoma
+  geom_boxplot(alpha = 0.5, color = "black") +  # Boxplot con bordes negros
+  geom_jitter(  # Agregar puntos con shapes
+              position = position_jitter(width = 0.2), 
+              size = 4, alpha = 0.8) +  
+  facet_wrap(~ treatment, labeller = labeller(treatment = c("purified_air" = "purified air", "ambient_air_IE" = "ambient air UNAM", "ozone_moderate" ="moderate", "ozone_contingency" = "contingency"))) +  
+  stat_summary(
+    fun.data = stat_box_data, 
+    geom = "text", 
+    position = position_dodge(width = 0.75), 
+    hjust = 0.5,
+    vjust = 0.5, 
+    size = 6)+
+  labs(title = "",
+       x = "",
+       y = "Total Chlorophyll (mg/g)") +
+  scale_fill_manual(values = c("0" = "white", "1" = "#7962cb"), 
+                    labels = c("Assymptomatic", "Symptomatic")) +  # Colores para los boxplots
+  scale_x_discrete(labels = c("0" = "Assymptomatic", "1" = "Symptomatic")) +  # Cambiar etiquetas del eje X
+  guides(shape = guide_legend(title = "Relatedness Group"),
+          fill = "none" ) +  # Leyenda para shape
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 25), # Tamaño del texto del eje X
+    axis.text.y = element_text(size = 25),                        # Tamaño del texto del eje Y
+    legend.title = element_text(size = 25),                       # Tamaño del título de la leyenda
+    legend.text = element_text(size = 20),                        # Tamaño del texto de la leyenda
+    axis.title.y = element_text(size = 20),
+    legend.title.align = 0.5,
+    legend.position = "right",
+    text = element_text(size = 20),
+    plot.title = element_text(lineheight = 1.1))
+
+
+# Export image# Export imagecolors_woSRX
+ggsave("../outputs/Figures/model_Cloro_ozone-damage-treatment.png", width = 16, height = 10, dpi = 600)
+
+```
+
+# Calcular HETEROCIGOSIDAD
+
+
+```{r }
+# Leer el archivo .het
+het_data <- read.table("../metadata/neutralmarch.het", header = TRUE)
+
+# Cambiar el nombre de la columna 'IND' por 'ID'
+colnames(het_data)[colnames(het_data) == "INDV"] <- "ID"
+
+# Verificar que se cambió el nombre
+head(het_data)
+
+
+# Calcular la heterocigosidad observada
+het_data$H_obs <- 1 - (het_data$O.HOM / het_data$N_SITES)
+
+# Ver los resultados
+head(het_data)
+
+
+#Agregar Genetic Groups
+df_mergeChloro_suv_GenGro_Het <- merge(df_mergeChloro_suv_GenGro, het_data, by = "ID", all.x = TRUE)
+
+```
+
+
+```{r }
+# Histograma de la heterocigosidad observada
+hist(df_mergeChloro_suv_GenGro_Het$H_obs, 
+     main = "Distribución deHeterocigosidad por Individuo de Seq y No agruped de 5 tratamientos", 
+     xlab = "Heterocigosidad Observada", 
+     col = "lightblue", 
+     border = "blue")
+```
+
+
+```{r }
+
+
+df_mergeChloro_suv_GenGro_HetAPAX <- df_mergeChloro_suv_GenGro_Het %>%
+  filter(treatment != "purified_air" & treatment != "ambient_air_SRX")
+
+df_mergeChloro_suv_GenGro_HetwoAP <- df_mergeChloro_suv_GenGro_Het %>%
+  filter(treatment != "purified_air")
+
+df_mergeChloro_suv_GenGro_HetAX <- df_mergeChloro_suv_GenGro_Het %>%
+  filter(treatment != "ambient_air_SRX")
+
+# Gráfico de dispersión de heterocigosidad por individuo
+plot(df_mergeChloro_suv_GenGro_HetAPAX$H_obs, 
+     main = "Heterocigosidad por Individuo de Seq y No Seq de df_mergeChloro_GenGro_HetAPAX", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = "blue")
+
+```
+
+
+```{r }
+# Graficar la heterocigosidad observada por fenotipo
+boxplot(H_obs ~ ozone_damage, data = df_mergeChloro_suv_GenGro_HetAPAX, 
+        main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos con AP", 
+        xlab = "Fenotipo", 
+        ylab = "Heterocigosidad Observada", 
+        col = c("lightblue", "lightgreen"))  # Cambia los colores si lo prefieres
+
+```
+
+
+
+```{r }
+
+# Crear un vector de colores según el fenotipo o grupo
+colores <- as.factor(df_mergeChloro_suv_GenGro_HetAPAX$ozone_damage)  # o 'fenotipo', si es la columna que tienes
+
+# Graficar, usando colores distintos para cada grupo
+plot(df_mergeChloro_suv_GenGro_HetAPAX$H_obs, 
+     main = "Heterocigosidad Observada por Fenotipo 5 Grupos Geneticos sin AP", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = colores)
+
+
+```
+
+
+
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+df_mergeChloro_suv_GenGro_HetAPAX_filtered <- df_mergeChloro_suv_GenGro_HetAPAX %>%
+  filter(ID != "AE22_N04TAF")
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+df_mergeChloro_suv_GenGro_HetAPAX_filtered$ozone_damage <- factor(df_mergeChloro_suv_GenGro_HetAPAX_filtered$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(df_mergeChloro_suv_GenGro_HetAPAX_filtered, aes(x = H_obs, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "Heterocigosity", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+```{r }
+# Ajustar el modelo GLM
+modelodf_mergeChloro_suv_GenGro_HetAPAX_filtered <- glm(delta_altura ~ H_obs * ozone_damage, 
+              family = Gamma(link = "log"), 
+              data = df_mergeChloro_suv_GenGro_HetAPAX_filtered)
+
+# Resumen del modelo
+summary(modelodf_mergeChloro_suv_GenGro_HetAPAX_filtered)
+
+```
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+df_mergeChloro_suv_GenGro_HetAPAX_filtered <- df_mergeChloro_suv_GenGro_HetAPAX %>%
+  filter(ID != "AE22_N04TAF")
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+df_mergeChloro_suv_GenGro_HetAPAX_filtered$ozone_damage <- factor(df_mergeChloro_suv_GenGro_HetAPAX_filtered$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(df_mergeChloro_suv_GenGro_HetAPAX_filtered, aes(x = F, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "F", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+
+
+# Modelo considerando HETEROCIGOSIDAD
+
+#Modelo delta Altura SIN purificados
+
+```{r }
+# Prueba con distintas familias
+fig_gaussian <- ggplot(df_mergeChloro_suv_GenGro_HetAPAX_filtered, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = gaussian(link = "identity")), fullrange = TRUE) +
+  labs(title = "GLM con Gaussian", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+fig_gamma <- ggplot(df_mergeChloro_suv_GenGro_HetAPAX_filtered, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), fullrange = TRUE) +
+  labs(title = "GLM con Gamma", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+fig_inverse_gaussian <- ggplot(df_mergeChloro_suv_GenGro_HetAPAX_filtered, aes(x = H_obs, y = delta_altura, color = ozone_damage)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "glm", method.args = list(family = inverse.gaussian(link = "log")), fullrange = TRUE) +
+  labs(title = "GLM con Inverse Gaussian", x = "Heterocigosidad", y = "Delta Altura") +
+  theme_bw()
+
+# Mostrar los gráficos
+print(fig_gaussian)
+print(fig_gamma)
+print(fig_inverse_gaussian)
+
+
+model_gaussian <- glm(delta_altura ~ H_obs, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = gaussian(link = "identity"))
+model_gamma <- glm(delta_altura ~ H_obs, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+model_inverse_gaussian <- glm(delta_altura ~ H_obs, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = inverse.gaussian(link = "log"))
+
+# Comparar AIC de los modelos
+AIC(model_gaussian, model_gamma, model_inverse_gaussian)
+
+```
+
+```{r }
+
+#Distribución Exponencial o Gamma (Gamma): Si los datos son continuos, no negativos, y asimétricos.
+
+#delta_altura = cambio de altura antes y despues del Tratamiento con dosis de ozono
+#ozone_damage = Fenotipo Sintomatico o Asintomatico antes y despues del Tratamiento con dosis de ozono
+#Treatment = Dosis de ozono a la que se expusieron los arboles por 3 meses
+#GroupMatrix = Grupo genetico al que se asociaron de acuerdo a un analisis de parentesco
+#ChamberNumber = se refiere a la camara en la que se encontraban los arboles, cada tratamiento tenia 3 diferentes
+
+
+# Convertir ozone_damage a factor (si es apropiado tratarlo como categoría)
+df_mergeChloro_suv_GenGro_HetAPAX_filtered$ozone_damage <- factor(df_mergeChloro_suv_GenGro_HetAPAX_filtered$ozone_damage)
+
+# Crear el gráfico
+g0 <- ggplot(df_mergeChloro_suv_GenGro_HetAPAX_filtered, aes(x = H_obs, y = delta_altura))
+
+fig5all <- g0 + 
+  geom_point(aes(colour = ozone_damage, shape = ozone_damage), alpha = 0.5, size = 2.5) + 
+  ylim(0, 22) + 
+  geom_smooth(method = "glm", method.args = list(family = Gamma(link = "log")), aes(color = ozone_damage), fullrange = T) + 
+  labs(x = "Heterocigosity", y = "Delta height") + 
+  theme_bw()
+
+fig5all
+
+```
+
+
+```{r }
+# Model all independent variables WITH health status interaction 
+
+
+glm_1<-glm(delta_altura ~ H_obs, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_1)
+
+
+glm_2<-glm(delta_altura ~ H_obs + ozone_damage, data =df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_2)
+
+
+
+glm_3<-glm(delta_altura ~ H_obs + treatment, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_3)
+
+
+
+glm_4<-glm(delta_altura ~ H_obs + GroupMatrix, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_4)
+
+
+glm_5<-glm(delta_altura ~ H_obs + treatment + GroupMatrix, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_5)
+
+glm_6<-glm(delta_altura ~ H_obs + ozone_damage + GroupMatrix, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_6)
+
+
+glm_7<-glm(delta_altura ~ H_obs + ozone_damage + treatment, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_7)
+
+
+glm_8<-glm(delta_altura ~ H_obs + ozone_damage + treatment + GroupMatrix, data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_8)
+
+
+glm_9<-glmer(delta_altura ~ H_obs + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_9)
+
+
+glm_10<-glmer(delta_altura ~ H_obs + ozone_damage + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_10)
+
+
+
+glm_11<-glmer(delta_altura ~ H_obs + treatment + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_11)
+
+
+
+glm_12<-glmer(delta_altura ~ H_obs + GroupMatrix + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_12)
+
+
+glm_13<-glmer(delta_altura ~ H_obs + treatment + GroupMatrix + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_13)
+
+glm_14<-glmer(delta_altura ~ H_obs + ozone_damage + GroupMatrix + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_14)
+
+
+glm_15<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_15)
+
+
+
+glm_16<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + GroupMatrix + (1|GroupMatrix), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_16)
+
+
+glm_17<-glmer(delta_altura ~ H_obs + (1|GroupMatrix/treatment), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_17)
+
+#Revisar
+glm_18<-glmer(delta_altura ~ H_obs + ozone_damage + (1|GroupMatrix/treatment), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_18)
+
+glm_19<-glmer(delta_altura ~ H_obs + ozone_damage + treatment + (1|GroupMatrix/treatment), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_19)
+
+glm_20<-glmer(delta_altura ~ H_obs + ozone_damage + GroupMatrix + (1|GroupMatrix/treatment), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_20)
+
+glm_21<-glmer(delta_altura ~ H_obs + ozone_damage + treatment+  GroupMatrix +(1|GroupMatrix/treatment), data = df_mergeChloro_suv_GenGro_HetAPAX_filtered, family = Gamma(link = "log"))
+summary(glm_21)
+
+# Comparar los AIC de los dos modelos
+AIC(glm_1, glm_2, glm_3, glm_4, glm_5,
+    glm_6, glm_7, glm_8, glm_9, glm_10,
+    glm_11, glm_12, glm_13, glm_14, glm_15,
+    glm_16, glm_17, glm_18, glm_19, glm_20,
+    glm_21)
+
+
+```
+
+
+```{r }
+# El archivo cargado contiene las muestras que se secuenciaron en GBS con la informacion del monitoreo participativo
+info_GBS <- read.csv("../../SecuencingData/outputs/df_GBS_metadata.csv") 
+
+# Descartar blancos de la base de datos GBS
+df_info_GBS <- info_GBS %>%
+  filter(Treatment != "blank")
+
+het_data2<- het_data
+
+colnames(het_data2)[which(names(het_data2) == "ID")] <- "Sample_Name_Plate"
+#Agregar Genetic Groups
+
+df_info_GBS_Het <- merge(df_info_GBS, het_data2, by = "Sample_Name_Plate", all.x = TRUE)
+
+
+# Crear un vector de colores según el fenotipo o grupo
+colores <- as.factor(df_info_GBS_Het$Treatment)  # o 'fenotipo', si es la columna que tienes
+
+
+# Graficar, usando colores distintos para cada grupo
+plot(df_info_GBS_Het$H_obs, 
+     main = "Heterocigosidad Observada Neutrales", 
+     xlab = "Individuo", 
+     ylab = "Heterocigosidad Observada", 
+     pch = 16, 
+     col = colores)
+
+```
+

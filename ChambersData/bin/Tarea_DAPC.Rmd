@@ -1,0 +1,476 @@
+---
+title: "Tarea DAPC"
+author: "Vero"
+date: "2025-04-10"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
+---
+
+# Cargar libreria 
+adegenet permite usar datos microbov
+
+```{r }
+library(vcfR)
+library(adegenet)
+data(microbov)
+```
+# Tarea
+
+# 1.- Correr este ejemplo paso por paso y explorar el objeto que sale del dapc. 
+tab<-summary(dapc(microbov, n.da=100, n.pca=3))$assign.per.pop*100
+
+La linea de codigo involucra 3 instrucciones, primero hacer un dapc, seguido de un resumen de ese dapc y tercero el calculo del porcentaje de la proporcion de reasignacion exitosa a cada poblacion
+
+## Crear dapc con la base el objeto microbov.
+
+La función dapc nos genera un dapc del objeto microbov considerando 100 ejes retenidos en el paso de Analisis Discriminantes y 3 ejes retenidos en el Analisis de Componentes Prinncipales. 
+
+```{r }
+dapc(microbov, n.da=100, n.pca=3)
+
+choco<- dapc(microbov, n.da=100, n.pca=3)
+
+choco
+
+choco$assign
+
+
+```
+## Resumen de DAPC.
+Summary nos proporciona la informacion de dimensiones, poblaciones, proporcion de muestras asignadas a cada poblacion, tamaño de los grupos previos y posterior tamaño de los grupos.
+
+```{r }
+summary(dapc(microbov, n.da=100, n.pca=3))
+```
+Eran 50 Borgou pero fallo en 12
+o sea que lo hizo bien en 50-12 = 38 
+osea lo hizo bien en 38/50 o sea 0.76 osea 76%
+
+## Porcentaje de la asignacion a la poblacion.
+
+assign.per.pop*100 Saca el porcentaje de la proporcion de reasignacion exitosa a cada poblacion
+
+```{r }
+summary(dapc(microbov, n.da=100, n.pca=3))$assign.per.pop*100
+```
+
+# Duda: Como se calcula la asignacion de poblacion: assign.per.pop
+The slot assign.per.pop indicates the proportions of successful reassignment (based on
+the discriminant functions) of individuals to their original clusters. Large values indicate
+clear-cut clusters, while low values suggest admixed groups.
+
+
+# 2.- ¿Qué sale en esta gráfica al hacer la clasificación por find.clusters o por categoría de daño?
+
+En el set de muestras de camaras (AE, CC, CA) con todos los SNPs.
+A partir de find.cluster salen los grupos en los que se dividen los datos por la estructura genetica de los individuos, se obtienen 5 que corresponden con los grupos familiares. La asignacion es contundente roja.
+
+
+```{r }
+#Crear objeto genlight con datos camaras
+vcfR_chambers <- read.vcfR("../../../../VCF/GBSM_Fenotype_AECCCA.recode.vcf")
+vcf_chambers<-vcfR2genlight(vcfR_chambers)
+
+grp <- find.clusters(vcf_chambers, max.n.clust = 20, n.pca = 50, choose.n.clust = FALSE, stat = "BIC", method = "kmeans")
+
+#find.clusters(vcf_chambers)
+
+plot(grp$Kstat, type = "o", xlab = "numero de grupos (K)", ylab = "BIC", main = "find.clusters")
+
+# corremos dapc con los grupos formados
+dapcfindcluster <- dapc(vcf_chambers, grp$grp, n.pca = 50, n.da = 3) 
+
+scatter(dapcfindcluster)
+
+table(grp$grp)
+
+assignplot(dapcfindcluster)
+summary(dapcfindcluster)
+```
+A partir de definir nosotrxs los grupos en los que se dividen los datos (sintomatico y asintomatico), se obtienen 5 que corresponden con los grupos familiares. Los colores no muestran una asignacion contundente como en el anterior.
+
+```{r }
+# cargamos los datos de las categorias de daño
+meta <- read.table("../outputs/pop_Fenotype_AECCCA_DAPC.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
+
+pop(vcf_chambers) <- meta$suv_damozo
+
+
+# corremos dapc con los grupos de asintomatico y sintomatico
+dapc_AECCCA <- dapc(vcf_chambers, var.contrib = TRUE, n.pca = 25, n.da = 4) 
+assignplot(dapc_AECCCA)
+dapc_AECCCA$grp
+
+summary(dapc_AECCCA) 
+
+vcf_chambers@pop
+```
+# Categorizacion real
+```{r }
+vcf_chambers@pop
+```
+# Categorizacion por parametros en el DAPC
+```{r }
+dapc_AECCCA$assign
+```
+
+
+
+# 3.- ¿Cuántas veces hay una congruencia (cruz azul en rectángulo lo más rojo) para las categorías de daño?
+dapc_AECCCA <- dapc(vcf_chambers, var.contrib = TRUE, n.pca = 25, n.da = 3) 
+ 56 muestras en total
+
+ 
+ 
+Los conte a ojo porque no supe hacerlo con codigo.
+De las 56 muestras: 
+27 corresponden con color rojo y cruz azul
+19 corresponden con color rojo y cruz azul
+10 corresponden con color rojo y cruz azul
+
+
+|  color   | survive_0 | survive_1 |Congruencia |
+|----------|-----------|-----------|-----------|
+| rojo     | 20        | 7         | 27 
+| naranja  | 11        | 8         | 19
+| amarillo | 4         | 6         | 10
+| total    | 35        | 21        | 56
+
+
+```{r }
+# corremos dapc con los grupos formados
+dapc_AECCCA <- dapc(vcf_chambers, var.contrib = TRUE, n.pca = 25, n.da = 3) 
+assignplot(dapc_AECCCA)
+```
+
+# 4.- Pero lo más importate es: ¿Qué tan roja vs blanca o roja vs naranja es la gráfica?. Explicar qué signfica
+La diferencia es más roja vs amarilla o naranja vs amarilla, casi no hay roja vs blanca, eso indica que la asignación a un grupo no es contundente.
+
+```{r }
+# corremos dapc con los grupos formados
+dapc_AECCCA <- dapc(vcf_chambers, var.contrib = TRUE, n.pca = 25, n.da = 3) 
+assignplot(dapc_AECCCA)
+```
+
+
+# 5.-Explorar el objeto microbov ¿Qué hay en “pop”?
+
+@pop: population of each individual (group size range: 30-61)
+Puede contener la poblacion a la que pertenece cada individuo. en este archivo parecen ser 15 diferentes 
+15 Levels: Borgou Zebu Lagunaire NDama Somba Aubrac Bazadais BlondeAquitaine BretPieNoire ... Salers
+
+```{r }
+microbov
+microbov@pop
+```
+
+
+# 6.-¿Qué hace $assign.per.pop*100?
+Nos arroja el porcentaje de la proporcion de reasignacion exitosa a cada poblacion
+
+```{r }
+
+summary(dapc(microbov, n.da=100, n.pca=3))$assign.per.pop*100
+```
+# 7.- ¿Qué hace pop(x) <- sample(pop(x))
+Hace un muestreo al azar, del mismo tamaño original de cada grupo (raza). O sea revuelve a los individuos en grupos nuevos, que NO corresponden a su raza real 
+
+```{r }
+x <- microbov 
+pop(x) <- sample(pop(x))
+pop(x)
+```
+
+# 8.- ¿Qué hacer con los oyameles?
+
+```{r }
+#Crear objeto genlight
+vcfR_chambers <- read.vcfR("../../../../VCF/GBSM_Fenotype_APAECCCA.recode.vcf")
+vcf_chambers<-vcfR2genlight(vcfR_chambers)
+vcf_chambers
+
+# cargamos los datos de las categorias de daño
+meta <- read.table("../outputs/pop_Fenotype_APAECCCA_DAPC.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
+pop(vcf_chambers) <- meta$suv_damozo
+
+# corremos dapc con los grupos formados
+dapc(vcf_chambers, n.pca = 25, n.da = 3) 
+
+x <- vcf_chambers 
+pop(x) <- sample(pop(x))
+pop(x)
+
+
+summary(dapc(vcf_chambers,pop(vcf_chambers), n.pca = 25, n.da = 3))$assign.per.pop*100
+
+temporiginal <- summary(dapc(vcf_chambers,pop(vcf_chambers), n.pca = 25, n.da = 3))$assign.per.pop*100
+
+
+temp <- summary(dapc(vcf_chambers, n.pca = 25, n.da = 3))$assign.per.pop*100
+
+barplot(temporiginal, xlab = "% of reassigment", horiz = TRUE, las=1)
+
+barplot(temp, xlab = "% of reassigment", horiz = TRUE, las=1)
+
+
+```
+
+
+# 9.- ¿Qué esperamos ver si el modelo no está over-fit?
+
+Que al aleatorizarse los datos no se vea una diferencia entre grupos tan definida.
+
+
+
+# 10.- ¿Qué hace temp$tab? y porqué del 1 al 5?
+dapc2 <- dapc(microbov, n.da=100, n.pca=50)
+temp <- a.score(dapc2)
+names(temp)
+
+Visibiliza la tabla de datos de cada simulacion para cada poblacion.
+
+
+```{r }
+
+dapc2 <- dapc(microbov, n.da=100, n.pca=50)
+temp <- a.score(dapc2)
+names(temp)
+temp$tab
+temp$tab[1:5,1:5]
+
+```
+
+
+# 11.- ¿Qué significa sim.1, sim.2?
+Son las simulaciones realizadas para los componentes principales 1 y 2.
+
+```{r }
+
+temp$tab[1:5,1:5]
+```
+
+
+# 12.- ¿De qué sirve saber la media del score?
+Para tener un parametro a partir del cual comparar el promedio de cada poblacion. Se puede identificar qué poblaciones están por encima o por debajo de la media general y detectar valores extremos.
+
+```{r }
+temp$pop.score
+temp$mean
+
+```
+
+
+# 13.- ¿Qué habría que hacer distinto?
+Calcule a-score del dapc generado con find.cluster y del dapc generado con los grupos asintomatico y sintomatico. En realidad solo tendría que hacer la optimización a partir del dapc con los grupos definidos asintomaticos y sintomaticos.
+
+```{r }
+
+grp <- find.clusters(vcf_chambers, max.n.clust = 20, n.pca = 70, choose = FALSE, stat = "BIC", method = "kmeans")
+
+# corremos dapc con los grupos formados
+dapcfindcluster <- dapc(vcf_chambers, grp$grp, n.pca = 20, n.da = 70) 
+
+temp <- optim.a.score(dapcfindcluster)
+```
+
+# 14.- ¿Qué hace NA.method=”mean” y por qué se ocupa?
+
+Remplaza los valores NA por el promedio de los valores que no tienen NA y corresponden a los sitios variantes. Se ocupa porque para construir una matriz no podemos tener NA
+
+```{r }
+
+data(nancycats)
+x <- nancycats
+nancycats@pop
+mat <- tab(x, NA.method="mean")
+grp <- pop(x)
+xval <- xvalDapc(mat, grp, n.pca.max = 300, training.set = 0.9,
+result = "groupMean", center = TRUE, scale = FALSE,
+n.pca = NULL, n.rep = 30, xval.plot = TRUE)
+xval
+
+```
+
+# 15.- Datos camaras
+
+## a) Encontrar cluster de la estructura de los datos
+```{r }
+#Crear objeto genlight con datos camaras
+vcfR_chambers <- read.vcfR("../../../../VCF/GBSM_Fenotype_AECCCA.recode.vcf")
+vcf_chambers<-vcfR2genlight(vcfR_chambers)
+
+# corremos find.cluster, se escoje un numero maximo de clusters 
+grp <- find.clusters(vcf_chambers, max.n.clust = 20, n.pca = 50, choose = FALSE, stat = "BIC", method = "kmeans")
+
+table(grp$grp)
+
+grp$grp
+  
+##
+
+plot(grp$Kstat, type = "o", xlab = "numero de grupos (K)",
+     ylab = "BIC",
+     main = "find.clusters")
+
+# corremos dapc con los grupos formados
+dapc1 <- dapc(vcf_chambers, grp$grp, n.pca = 50, n.da = 3) 
+
+dapc1
+
+```
+
+
+```{r }
+myCol <- c("purple","green","orange","red","blue")
+
+scatter(dapc1, scree.da=T, bg="white",scree.pca=TRUE, pch=20, cell=0, cstar=0, col=myCol, solid=.4,
+cex=3,clab=0, leg=TRUE, txt.leg=paste("Cluster",1:5))
+```
+
+```{r}
+assignplot(dapc1)
+
+```
+## b) Generar DAPC con los grupos definidos para asintomaticos y sintomaticos
+```{r }
+
+meta <- read.table("../outputs/pop_Fenotype_AECCCA_DAPC.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
+
+pop(vcf_chambers) <- meta$suv_damozo
+
+dapc1chamberAECCCA <- dapc(vcf_chambers, n.pca = 50, n.da = 3) 
+# cargamos los datos de las categorias de daño
+
+vcf_chambers@pop
+dapc1chamberAECCCA 
+
+```
+## c) Generar resumen
+```{r }
+
+summary(dapc1chamberAECCCA)
+
+```
+## d) plot
+```{r }
+scatter(dapc1chamberAECCCA, scree.da=T, bg="white",scree.pca=TRUE, pch=20, cell=0, cstar=0, col=myCol, solid=.4,
+cex=3,clab=0, leg=TRUE, txt.leg=paste("Cluster",1:2))
+
+```
+## d) asignacion
+```{r }
+assignplot(dapc1chamberAECCCA)
+
+```
+
+
+
+```{r }
+temp <- summary(dapc1chamberAECCCA)$assign.per.pop*100
+temp 
+```
+
+```{r }
+temp <- a.score(dapc1chamberAECCCA)
+temp
+
+#Hay sobreajuste
+temp <- optim.a.score(dapc1chamberAECCCA)
+temp
+
+# Salio 11
+```
+
+```{r }
+# xvalDAPC r
+x <- vcf_chambers
+mat <- tab(vcf_chambers, NA.method="mean")
+grp <- pop(x)
+xval <- xvalDapc(mat, grp, n.pca.max = 300, training.set = 0.9,
+result = "groupMean", center = TRUE, scale = FALSE, 
+n.pca = NULL, n.rep = 100, xval.plot = TRUE)
+
+xval[2:6]
+
+# Salio 15
+```
+
+
+
+## e)Generar DAPC con pca optimizados
+Me quede con 13 pc
+
+```{r }
+dapc2chamberAECCCA <- dapc(vcf_chambers, n.pca = 13, n.da = 3) 
+# cargamos los datos de las categorias de daño
+
+dapc2chamberAECCCA 
+```
+
+```{r }
+scatter(dapc2chamberAECCCA, scree.da=T, bg="white",scree.pca=TRUE, pch=20, cell=0, cstar=0, col=myCol, solid=.4,
+cex=3,clab=0, leg=TRUE, txt.leg=paste("Cluster",1:2))
+
+```
+
+```{r }
+assignplot(dapc2chamberAECCCA)
+
+```
+Pertenencia posterior
+```{r }
+
+dapc2chamberAECCCA$posterior
+```
+
+Grupos asignados por nosotros
+```{r }
+
+dapc2chamberAECCCA$grp
+```
+
+Grupos asignados por el dapc
+```{r }
+
+dapc2chamberAECCCA$assign
+```
+
+```{r }
+temp <- summary(dapc2chamberAECCCA)$assign.per.pop*100
+temp 
+```
+
+```{r }
+temp <- a.score(dapc2chamberAECCCA)
+temp
+
+# No Hay sobreajuste, porque el valor no salio negativo
+temp <- optim.a.score(dapc2chamberAECCCA)
+temp
+
+# Salio 13
+```
+
+
+
+# Comparar optimizado de 10 y 15 PCA
+
+```{r }
+temporiginal_1 <- summary(dapc(vcf_chambers,pop(vcf_chambers), n.pca = 13, n.da = 1))$assign.per.pop*100
+
+
+barplot(temporiginal_1, xlab = "% of reassigment", horiz = TRUE, las=1)
+```
+
+
+```{r }
+x <- vcf_chambers
+pop(x)<- sample(pop(x))
+temp<-summary(dapc(x, n.da = 1, n.pca = 15))$assign.per.pop*100
+temp
+
+```

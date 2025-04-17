@@ -1,0 +1,1761 @@
+---
+title: "Ozono_concentration_chambers"
+author: "Vero"
+date: "28/10/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+```{r}
+library(vcfR)
+library(gdsfmt)
+library(SNPRelate)
+#library(related)
+library(ggplot2)
+library(pheatmap)
+library(reshape2)
+library("readxl")
+library(factoextra)
+library(dplyr)
+library(readr) #Leer csv
+
+
+```
+
+# Load files
+```{r}
+info_GBS <- read.csv("../../SecuencingData/outputs/df_GBS_metadata.csv") 
+
+# Mostrar las primeras filas del data frame
+head(info_GBS)
+
+
+```
+
+## Anotaciones colores
+```{r}
+
+# Definir colores para los estados
+ann_colors_surv <- list(Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink"))
+
+# Definir colores para los estados
+ann_colors_cham <- list(Chamber = c(
+  "1" = "black",
+  "2" = "green",
+  "3" = "red",
+  "4" = "blue",
+  "5" = "purple",
+  "6" = "orange",
+  "7" = "lightyellow",
+  "8" = "brown",
+  "9" = "cyan",
+  "10" = "magenta",
+  "11" = "yellow",
+  "12" = "gray",
+  "13" = "lightblue",
+  "14" = "lightgreen",
+  "15" = "lightpink"
+))
+
+# Definir colores para los estados
+ann_colors_treatment <- list(Treatment = c("ambient_air_SRX" ="#697329",
+                  "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a" ))
+
+
+# Definir colores para cada anotación
+ann_colors_mix <- list(
+  Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink"), # Colores para Grupo
+  Treatment =  c("ambient_air_SRX" ="#697329",
+                 "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a" ) # Colores para Tratamiento
+)
+
+ann_colors_mix2 <- list(Chamber = c(
+  "1" = "black",
+  "2" = "green",
+  "3" = "red",
+  "4" = "blue",
+  "5" = "purple",
+  "6" = "orange",
+  "7" = "lightyellow",
+  "8" = "brown",
+  "9" = "cyan",
+  "10" = "magenta",
+  "11" = "yellow",
+  "12" = "gray",
+  "13" = "lightblue",
+  "14" = "lightgreen",
+  "15" = "lightpink"),
+  Treatment =  c("ambient_air_SRX" ="#697329",
+                 "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a" ) # Colores para Tratamiento
+)
+
+
+ann_colors_mix3<- list(Chamber = c(
+  "1" = "black",
+  "2" = "green",
+  "3" = "red",
+  "4" = "blue",
+  "5" = "purple",
+  "6" = "orange",
+  "7" = "lightyellow",
+  "8" = "brown",
+  "9" = "cyan",
+  "10" = "magenta",
+  "11" = "yellow",
+  "12" = "gray",
+  "13" = "lightblue",
+  "14" = "lightgreen",
+  "15" = "lightpink"),
+  Treatment =  c("ambient_air_SRX" ="#697329",
+                 "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a" ), # Colores para Tratamiento
+  Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink") # Colores para Grupo
+)
+
+ann_colors_mix4 <- list(
+  Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink"), # Colores para Grupo
+  Treatment =  c("ambient_air_SRX" ="#697329",
+                 "purified_air" ="#48b1da", 
+                  "ambient_air_IE" ="#5cc051",  
+                  "ozone_moderate" ="#bcb635", 
+                  "ozone_contingency" ="#d3453a"),
+  PercentageOzonedamage = c(
+    "0%" = "darkgreen", 
+    "less_than_10%"= "gold2", 
+    "10_to_40%"= "chocolate1",
+    "40_to_50%"= "orangered", 
+    "50_to_70%"= "red4", 
+    "more_than_70%"= "darkorchid4"
+  ) # Colores para Tratamiento
+)
+
+
+ann_percentage_damage<- list(
+   PercentageOzonedamage = c(
+    "0%" = "darkgreen", 
+    "less_than_10%"= "gold2", 
+    "10_to_40%"= "chocolate1",
+    "40_to_50%"= "orangered", 
+    "50_to_70%"= "red4", 
+    "more_than_70%"= "darkorchid4"
+  ) # Colores para Tratamiento
+)
+
+
+```
+
+
+
+# All SNPS 
+
+## Convertir VCF a formato GDS
+```{r}
+#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
+vcf_GBS.fn <- "../../../../VCF/all_GBS.vcf"
+
+gds_GBS.fn <- "ALLsnps.gds"
+snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
+
+# Abrir archivo GDS
+genofileGBS <- snpgdsOpen(gds_GBS.fn)
+
+```
+
+## RELATEDNESS aLL GBS
+```{r}
+# Calcular coeficientes de parentesco
+
+#0.5 ≈ gemelos idénticos
+#0.25 ≈ hermanos completos o padre-hijo
+#0.125 ≈ primos
+#0 ≈ no relacionados
+#Puede dar valores negativos cuando no hay relación entre muestras.
+
+
+#Crear archivo snpgdsIBDKING
+kinshipGBS<- snpgdsIBDKING(genofileGBS)
+
+kin_matrixGBSAll  <- kinshipGBS$kinship
+
+# Asignar nombres a filas y columnas (importante para identificación)
+rownames(kin_matrixGBSAll) <- colnames(kin_matrixGBSAll) <- kinshipGBS$sample.id
+
+```
+
+## Plot relatedness con ALL GBS
+```{r}
+
+pheatmap(kin_matrixGBSAll, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) All SNPs",
+         labels_row = rep("", nrow(kin_matrixGBSAll)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixGBSAll)) #Elimina las etiquetas de columnas
+         )
+```
+
+## List order heatmap
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSAll, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) All SNPs",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_ALL <- colnames(kin_matrixGBSAll)[p$tree_col$order]
+
+print(orden_columnas_ALL)
+```
+
+
+```{r}
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_ALL, 2)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_ALL, 4)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_ALL[grepl("r", orden_columnas_ALL, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixGBSAllOut <- kin_matrixGBSAll[!rownames(kin_matrixGBSAll) %in% samples_to_remove, !colnames(kin_matrixGBSAll) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixGBSAllOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con GBSAllOut",
+         labels_row = rep("", nrow(kin_matrixGBSAllOut)),# Elimina las etiquetas de filas
+)
+```
+
+
+
+# Casi Atipicos
+
+## Convertir VCF a formato GDS
+```{r}
+#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
+vcf_GBS.fn <- "../../../../VCF/set_casi_atipico.recode.vcf"
+
+gds_GBS.fn <- "casiAti.gds"
+snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
+
+# Abrir archivo GDS
+genofileGBS <- snpgdsOpen(gds_GBS.fn)
+
+```
+
+
+## RELATEDNESS Atipicos
+```{r}
+# Calcular coeficientes de parentesco
+
+#0.5 ≈ gemelos idénticos
+#0.25 ≈ hermanos completos o padre-hijo
+#0.125 ≈ primos
+#0 ≈ no relacionados
+#Puede dar valores negativos cuando no hay relación entre muestras.
+
+
+#Crear archivo snpgdsIBDKING
+kinshipGBS<- snpgdsIBDKING(genofileGBS)
+
+kin_matrixGBSAti  <- kinshipGBS$kinship
+
+# Asignar nombres a filas y columnas (importante para identificación)
+rownames(kin_matrixGBSAti) <- colnames(kin_matrixGBSAti) <- kinshipGBS$sample.id
+
+```
+
+## Plot
+```{r}
+
+
+pheatmap(kin_matrixGBSAti, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) casi Atipicos",
+         labels_row = rep("", nrow(kin_matrixGBSAti)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixGBSAti)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+## List order heatmap
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSAti, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Casi Atipicos",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_Ati <- colnames(kin_matrixGBSAti)[p$tree_col$order]
+
+print(orden_columnas_Ati)
+```
+
+```{r}
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_Ati, 2)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_Ati, 15)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_Ati[grepl("r", orden_columnas_Ati, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixGBSAtiOut <- kin_matrixGBSAti[!rownames(kin_matrixGBSAti) %in% samples_to_remove, !colnames(kin_matrixGBSAti) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixGBSAtiOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con GBSAti",
+         labels_row = rep("", nrow(kin_matrixGBSAllOut)),# Elimina las etiquetas de filas
+)
+```
+
+# Casi Neutrales 
+
+## Convertir VCF a formato GDS
+```{r}
+#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
+vcf_GBS.fn <- "../../../../VCF/set_casi_neutral.recode.vcf"
+
+gds_GBS.fn <- "casiNeu.gds"
+snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
+
+# Abrir archivo GDS
+genofileGBS <- snpgdsOpen(gds_GBS.fn)
+
+```
+
+## RELATEDNESS Casi Neutrales
+```{r}
+# Calcular coeficientes de parentesco
+
+#0.5 ≈ gemelos idénticos
+#0.25 ≈ hermanos completos o padre-hijo
+#0.125 ≈ primos
+#0 ≈ no relacionados
+#Puede dar valores negativos cuando no hay relación entre muestras.
+
+
+#Crear archivo snpgdsIBDKING
+kinshipGBS<- snpgdsIBDKING(genofileGBS)
+
+kin_matrixGBSNeut  <- kinshipGBS$kinship
+
+# Asignar nombres a filas y columnas (importante para identificación)
+rownames(kin_matrixGBSNeut) <- colnames(kin_matrixGBSNeut) <- kinshipGBS$sample.id
+
+```
+
+## Plot 
+```{r}
+
+pheatmap(kin_matrixGBSNeut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Casi Neutrales",
+         labels_row = rep("", nrow(kin_matrixGBSNeut)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixGBSNeut)) #Elimina las etiquetas de columnas
+         )
+```
+
+## List order heatmap
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSNeut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Casi Neutrales",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_Neu <- colnames(kin_matrixGBSNeut)[p$tree_col$order]
+print(orden_columnas_Neu)
+```
+
+```{r}
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_Neu, 4)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_Neu, 0)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_Neu[grepl("r", orden_columnas_Neu, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixGBSNeutOut <- kin_matrixGBSNeut[!rownames(kin_matrixGBSNeut) %in% samples_to_remove, !colnames(kin_matrixGBSNeut) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixGBSNeutOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con GBSNeutOut",
+         labels_row = rep("", nrow(kin_matrixGBSNeutOut)),# Elimina las etiquetas de filas
+)
+```
+
+## List order heatmap
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p <-pheatmap(kin_matrixGBSNeutOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con GBSNeutOut",
+         labels_row = rep("", nrow(kin_matrixGBSNeutOut)),# Elimina las etiquetas de filas
+)
+
+#Extraer orden de las muestras
+orden_columnas_Neu <- colnames(kin_matrixGBSNeutOut)[p$tree_col$order]
+print(orden_columnas_Neu)
+```
+
+```{r}
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_Neu, 0)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_Neu, 0)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_Neu[grepl("r", orden_columnas_Neu, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA",
+                         "D65_N7P18",    "D1_N7P1",    
+"A135_N08P46",  "H53_N6P12",    
+"A115_N12P40",  "D7_N08P01",
+"D127_N6P35", "C3_N9P2", "AE22_N04TAF", "H3_N9P2"
+)
+
+ #"F123_N6P41",   "K69_N10P20", 
+ 
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixGBSNeutOut <- kin_matrixGBSNeut[!rownames(kin_matrixGBSNeut) %in% samples_to_remove, !colnames(kin_matrixGBSNeut) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixGBSNeutOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con GBSNeutOut",
+         labels_row = rep("", nrow(kin_matrixGBSNeutOut)),# Elimina las etiquetas de filas
+)
+```
+## List order heatmap
+```{r }
+#Generar un objeto con el pheatmap
+
+
+p<-pheatmap(kin_matrixGBSNeutOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con GBSNeutOut",
+         labels_row = rep("", nrow(kin_matrixGBSNeutOut)),# Elimina las etiquetas de filas
+)
+
+#Extraer orden de las muestras
+orden_columnas_Neu <- colnames(kin_matrixGBSNeutOut)[p$tree_col$order]
+print(orden_columnas_Neu)
+```
+
+
+# Get vector specific for groups
+
+```{r}
+
+# Filtra las filas 
+chambers <- info_GBS %>%
+  filter(Treatment %in% c("contingency_ozone", "moderate_ozone", "ambient_air_IE", "purified_air", "ambient_air_SRX")) %>%
+  pull(Sample_Name_Plate)
+
+mothers <- info_GBS %>%
+  filter(Treatment == "actual_mother") %>%
+  pull(Sample_Name_Plate)
+
+forestRNat <- info_GBS %>%
+  filter(Treatment == "forest", reforested == "no") %>%
+  pull(Sample_Name_Plate)
+
+forestRef <- info_GBS %>%
+  filter(Treatment == "forest", reforested == "yes") %>%
+  pull(Sample_Name_Plate)
+
+Transcriptomic <- info_GBS %>%
+  filter(person_key_GBS == "transcriptomic") %>%
+  pull(Sample_Name_Plate)
+
+Gametophyte <- info_GBS %>%
+  filter(Treatment == "gametophyte") %>%
+  pull(Sample_Name_Plate)
+
+Blank <- info_GBS %>%
+  filter(Treatment == "blank") %>%
+  pull(Sample_Name_Plate)
+
+```
+
+# RELATEDNESS Forest RNatural y Chambers
+
+## Extraer Muestras de regeneracion Natural y las de las Camaras
+```{r}
+#Descartar muestras
+samples_to_remove <- c(Gametophyte, Blank, transcriptome_delete, forestRef)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_Cham <- kin_matrixGBSNeut[!rownames(kin_matrixGBSNeut) %in% samples_to_remove, 
+                                !colnames(kin_matrixGBSNeut) %in% samples_to_remove]
+```
+
+### Plot
+
+```{r}
+
+pheatmap(kin_matrixRNat_Cham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural, mother, transcriptoma y Chambers",
+         labels_row = rep("", nrow(kin_matrixRNat_Cham)),# Elimina las etiquetas de filas
+         
+         )
+```
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_Cham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural y Chambers",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_Cham <- colnames(kin_matrixRNat_Cham)[p$tree_col$order]
+print(orden_columnas_RNat_Cham)
+```
+# RELATEDNESS Natural y chambers sin outliers
+
+##Eliminar OUTLIERS y REPLICAS
+
+```{r}
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_RNat_Cham, 0)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_RNat_Cham, 2)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_RNat_Cham[grepl("r", orden_columnas_RNat_Cham, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamwoOut <- kin_matrixRNat_Cham[!rownames(kin_matrixRNat_Cham) %in% samples_to_remove, 
+                                !colnames(kin_matrixRNat_Cham) %in% samples_to_remove]
+
+```
+
+## Plot
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamwoOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural, mother,  transcriptoma y Chambers WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOut)),# Elimina las etiquetas de filas
+         )
+```
+
+## List order heatmap
+
+```{r}
+
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamwoOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNatural, mother,  transcriptoma y Chambers WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOut)),# Elimina las etiquetas de filas
+         )
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamwoOut   <- colnames(kin_matrixRNat_ChamwoOut)[p$tree_col$order]
+print(orden_columnas_RNat_ChamwoOut)
+
+```
+
+
+
+```{r}
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_RNat_ChamwoOut, 32)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_RNat_ChamwoOut, 0)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_RNat_ChamwoOut[grepl("r", orden_columnas_RNat_ChamwoOut, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamwoOutExterno <- kin_matrixRNat_ChamwoOut[!rownames(kin_matrixRNat_ChamwoOut) %in% samples_to_remove, !colnames(kin_matrixRNat_ChamwoOut) %in% samples_to_remove]
+
+```
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamwoOutExterno, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNat_ChamwoOutExterno",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutExterno)),# Elimina las etiquetas de filas
+)
+```
+
+
+
+```{r}
+
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamwoOutExterno, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con RNat_ChamwoOutExterno",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutExterno)),# Elimina las etiquetas de filas
+)
+
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamwoOutExterno   <- colnames(kin_matrixRNat_ChamwoOutExterno)[p$tree_col$order]
+print(orden_columnas_RNat_ChamwoOutExterno)
+
+```
+
+#RELATENESS Reforested and Chambers
+
+## Extraer Muestras de Reforested y las de las Camaras
+```{r}
+
+# "VS04_1516",  "VS4_NNAPNA" Salen en el mismo grupo
+#"VD04_1516",  "VD4_NNAPNA" Salen en el mismo grupo
+#"VS01_1516","VS02_1516", F67 Salen en el mismo grupo
+#"VD2_NNAPNA","VS03_1516" Salen CASI en el mismo grupo
+#"VD02_1516",  "VD2_NNAPNA", NO SON IGUALES pero como VD2 esta cercana a VS03 la descarte
+#G92 y G93
+#K70, K25
+
+
+#Rep transcrip
+
+#Secuenciadas
+#"VD01_1516"     "VD02_1516" "VD2_NNAPNA"   "VD3_NNAPNA"   "VD04_1516"  "VD4_NNAPNA"    "VD05_1516"  
+#"VS01_1516"     "VS02_1516"     "VS03_1516"     "VS04_1516"  "VS4_NNAPNA"   "VS05_1516"     
+
+# "VD01_1516", "VD2_1516", "VD3_NNAPNA", "VD04_1516", "VD05_1516"
+# "VS03_1516", "VS4_1516", "VS05_1516"
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c(forestRNat, mothers, Gametophyte, transcriptome_delete, Blank)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRef_Cham <- kin_matrixGBSNeut[!rownames(kin_matrixGBSNeut) %in% samples_to_remove, 
+                                !colnames(kin_matrixGBSNeut) %in% samples_to_remove]
+```
+
+## Plot 
+
+```{r}
+
+pheatmap(kin_matrixRef_Cham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Reforested y Chambers",
+         labels_row = rep("", nrow(kin_matrixRNat_Cham)),# Elimina las etiquetas de filas
+         )
+```
+
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRef_Cham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Reforested y Chambers",
+         labels_row = rep("", nrow(kin_matrixRNat_Cham)),# Elimina las etiquetas de filas
+         )
+
+#Extraer orden de las muestras
+orden_columnas_Ref_Cham <- colnames(kin_matrixRef_Cham)[p$tree_col$order]
+print(orden_columnas_Ref_Cham)
+```
+
+# RELATEDNESS Reforested y chambers sin outliers
+##Eliminar OUTLIERS y REPLICAS
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_Ref_Cham
+# Mostrar los últimoselementos del vector
+primeros <- head(orden_columnas_Ref_Cham, 0)
+print(primeros)
+
+# Mostrar los últimoselementos del vector
+ultimos <- tail(orden_columnas_Ref_Cham, 4)
+print(ultimos)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_Ref_Cham[grepl("r", orden_columnas_Ref_Cham, ignore.case = TRUE)]
+print(nombres_con_r)
+
+transcriptome_delete<- c("VS01_1516","VS02_1516", "VD2_NNAPNA","VD03_1516", "VD4_NNAPNA", "VS4_NNAPNA")
+
+#Descartar muestras
+samples_to_remove <- c( primeros, ultimos, nombres_con_r, transcriptome_delete)
+
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRef_ChamOut <- kin_matrixRef_Cham[!rownames(kin_matrixRef_Cham) %in% samples_to_remove,!colnames(kin_matrixRef_Cham) %in% samples_to_remove]
+
+```
+
+## Plot 
+
+```{r}
+
+pheatmap(kin_matrixRef_ChamOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Reforested, transcriptome y chambers WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixRef_ChamOut)),# Elimina las etiquetas de filas
+         )
+```
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <- pheatmap(kin_matrixRef_ChamOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Reforested, transcriptome y chambers WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixRef_ChamOut)),# Elimina las etiquetas de filas
+         )
+
+#Extraer orden de las muestras
+orden_columnas_Ref_ChamOut <- colnames(kin_matrixRef_ChamOut)[p$tree_col$order]
+print(orden_columnas_Ref_ChamOut)
+```
+
+# RELATENESS ONLY Reforested
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_Ref_ChamOut
+
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_CCCAAEAPAX <- orden_columnas_Ref_ChamOut[grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_Ref_ChamOut )]
+print(nombres_con_CCCAAEAPAX)
+
+#Descartar muestras
+samples_to_remove <- nombres_con_CCCAAEAPAX
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRefOut <- kin_matrixRef_ChamOut[!rownames(kin_matrixRef_ChamOut) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRef_ChamOut) %in% samples_to_remove]
+
+```
+
+
+## Plot 
+
+```{r}
+
+pheatmap(kin_matrixRefOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Reforested WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixRefOut)),# Elimina las etiquetas de filas
+         )
+```
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRefOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Reforested WO OUTLIERS",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+#Extraer orden de las muestras
+orden_columnas_RefOut <- colnames(kin_matrixRefOut)[p$tree_col$order]
+print(orden_columnas_RefOut)
+
+```
+
+# RELATENESS forest Natural
+
+```{r}
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_CCCAAEAPAX <- orden_columnas_RNat_ChamwoOut[grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamwoOut)]
+print(nombres_con_CCCAAEAPAX)
+#Descartar muestras
+samples_to_remove <- c(nombres_con_CCCAAEAPAX)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixNatOut <- kin_matrixRNat_ChamwoOut[!rownames(kin_matrixRNat_ChamwoOut) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRNat_ChamwoOut) %in% samples_to_remove]
+
+```
+
+## Plot 
+
+```{r}
+
+pheatmap(kin_matrixNatOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Natural WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixNatOut)),# Elimina las etiquetas de filas
+         )
+```
+## List order heatmap
+
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixNatOut, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) ONLY Natural WO OUTLIERS",
+         labels_row = rep("", nrow(kin_matrixNatOut)),# Elimina las etiquetas de filas
+         )
+
+#Extraer orden de las muestras
+orden_columnas_NatOut <- colnames(kin_matrixNatOut)[p$tree_col$order]
+print(orden_columnas_NatOut)
+
+```
+
+# RELATENESS ONLY chambers
+
+```{r}
+#Elimino los outliers (relatedness negativas) y muestras replicas
+orden_columnas_RNat_ChamwoOut
+
+
+#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
+nombres_con_forestRNat <- orden_columnas_RNat_ChamwoOut[!grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamwoOut)]
+print(nombres_con_forestRNat)
+
+#Descartar muestras
+samples_to_remove <- nombres_con_forestRNat
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixRNat_ChamwoOutCham <- kin_matrixRNat_ChamwoOut[!rownames(kin_matrixRNat_ChamwoOut) %in% samples_to_remove,
+                                                  !colnames(kin_matrixRNat_ChamwoOut) %in% samples_to_remove]
+
+```
+
+### Plot 
+
+```{r}
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) join Natural y chamber ONLY CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+        
+         )
+```
+
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) join Natural y chamber ONLY CHAMBERS",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+# Visualizar la estructura del dendrograma
+plot(p$tree_row)
+
+#Extraer orden de las muestras
+orden_columnas_RNat_ChamwoOutCham <- colnames(kin_matrixRNat_ChamwoOutCham)[p$tree_col$order]
+print(orden_columnas_RNat_ChamwoOutCham)
+```
+
+# RELATENESS ONLY chambers con arboles potencialmente semilleros
+## Extraer Muestras de regeneracion Natural y las de las Camaras
+
+```{r}
+#Descartar muestras
+
+df_mothersChambers <- info_GBS %>%
+  filter(Treatment %in% c("actual_mother", "potential_mother", "forest", "contingency_ozone", "moderate_ozone", "ambient_air_SRX" , "purified_air",  "ambient_air_IE" ))
+
+
+df_mothersChambers_filtered <- df_mothersChambers %>%
+  filter(is.na(tree_nodes) | !(tree_nodes >= 1 & tree_nodes <= 20),
+       is.na(tree_diameter_category) | tree_diameter_category %in% c("30_cm", "40_cm")  # Mantener filas con NA o con valores 30 o 40 en 'tree_diameter'
+)
+
+# Extraer solo los nombres que contienen "r"
+nombres_con_r <- orden_columnas_RNat_Cham[grepl("r", orden_columnas_RNat_Cham, ignore.case = TRUE)]
+print(nombres_con_r)
+
+
+rm(df_mothersChambers)
+
+
+# Encuentra las muestras en info_GBSMon$Sample_Name_Plate que no están en df_mothersChambers_filtered$Sample_Name_Plate
+muestras_no_en_segundo_df <- setdiff(info_GBS$Sample_Name_Plate, df_mothersChambers_filtered$Sample_Name_Plate)
+
+out_chambers<- c("AE22_N04TAF","AP12_N04TAF",  "B89_NNAP25",   "C122_NNAP44",  "D88_NNAP28","J89_NNAP28" )
+
+#Descartar muestras
+samples_to_remove <- c(muestras_no_en_segundo_df,nombres_con_r, nombres_con_r,out_chambers)
+
+# Filtrar la matriz eliminando las muestras en filas y columnas
+kin_matrixMother_ChamWO <- kin_matrixGBSNeut[!rownames(kin_matrixGBSNeut) %in% samples_to_remove, 
+                                !colnames(kin_matrixGBSNeut) %in% samples_to_remove]
+
+
+```
+
+### Plot 
+
+```{r}
+
+pheatmap(kin_matrixMother_ChamWO, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Mothers and CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixMother_ChamWO)),# Elimina las etiquetas de filas
+         )
+```
+
+## List order heatmap
+
+```{r }
+#Generar un objeto con el pheatmap
+
+p <-pheatmap(kin_matrixMother_ChamWO, 
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) Mothers and Chambers",
+         legend = TRUE,          # Asegurarse de que la leyenda esté activa
+         legend_height = 0.5)
+
+# Visualizar la estructura del dendrograma
+plot(p$tree_row)
+
+#Extraer orden de las muestras
+orden_columnas_Mother_ChamWO <- colnames(kin_matrixMother_ChamWO)[p$tree_col$order]
+print(orden_columnas_Mother_ChamWO)
+```
+
+
+```{r}
+
+#kin_matrixRNat_ChamwoOutExterno
+#orden_columnas_RNat_ChamwoOutExterno
+
+#kin_matrixRef_ChamWO, 
+#orden_columnas_Ref_Cham2
+
+#kin_matrixRNat_ChamwoOutCham
+#orden_columnas_RNat_ChamwoOutCham
+
+#kin_matrixMother_ChamWO
+#orden_columnas_Mother_ChamWO
+```
+
+
+# RELATEDNESS by GENETICS GROUPS
+
+```{r}
+
+
+# Prefijos que deseas eliminar
+prefijos_a_descartar <- c("AX", "AP", "AE", "CC", "CA")
+
+# Filtrar el vector para eliminar las cadenas que comienzan con los prefijos especificados
+vector_filtred_Nat <- orden_columnas_RNat_ChamwoOutExterno [!sapply(orden_columnas_RNat_ChamwoOutExterno, function(x) any(startsWith(x, prefijos_a_descartar)))]
+
+
+
+PWORNat<- vector_filtred_Nat
+kin_PWORNat <- kin_matrixRNat_ChamwoOutExterno[PWORNat, PWORNat]
+diag_lower <- lower.tri(kin_PWORNat, diag = FALSE)
+values_lower <- kin_PWORNat[diag_lower]
+mean_kin_PWORNat <- mean(values_lower)
+mean_kin_PWORNat
+
+
+# Prefijos que deseas conservar
+prefijos_a_conservar <- c("AX", "AP", "AE", "CC", "CA")
+
+# Filtrar el vector para quedarte solo con las cadenas que comienzan con los prefijos especificados
+vector_filtred_chamber <- orden_columnas_RNat_ChamwoOutExterno[sapply(orden_columnas_RNat_ChamwoOutExterno, function(x) any(startsWith(x, prefijos_a_conservar)))]
+
+
+PWOCham <- vector_filtred_chamber
+kin_PWOCham <- kin_matrixRNat_ChamwoOutExterno[PWOCham, PWOCham]
+diag_lower <- lower.tri(kin_PWOCham, diag = FALSE)
+values_lower <- kin_PWOCham[diag_lower]
+mean_kin_PWOCham <- mean(values_lower)
+mean_kin_PWOCham
+
+
+PWOCham_groupA<- c("AE29_N04TAF", "AX08_N04TAF",  "CA17_N04TAF",
+                   "AP09_N04TAF",  "CA07_N04TAF",  "AP17_N04TAF",
+                   "AP02_N04TAF",  "AP30_N04TAF","CC09_N04TAF",
+                   "AP10_N04TAF",  "CC21_N04TAF",  "AX07_N04TAF",
+                   "AX26_N04TAF",  "AE08_N04TAF",  "AX09_N04TAF",
+                   "AX17_N04TAF",  "AX19_N04TAF",  "AP05_N04TAF",
+                   "CC17_N04TAF",  "AP01_N04TAF",  "CC27_N04TAF",
+                   "AE05_N04TAF", "CA03_N04TAF",  "CA16_N04TAF",
+                   "AE14_N04TAF",  "CA14_N04TAF",  "AP16_N04TAF",
+                   "CC29_N04TAF",  "AE28_N04TAF","CA04_N04TAF" 
+             )
+kin_PWOCham_groupA <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupA, PWOCham_groupA]
+diag_lower <- lower.tri(kin_PWOCham_groupA, diag = FALSE)
+values_lower <- kin_PWOCham_groupA[diag_lower]
+mean_kin_PWOCham_groupA <- mean(values_lower)
+mean_kin_PWOCham_groupA
+
+
+
+PWOCham_groupB<- c("AE19_N04TAF","AX15_N04TAF","AX14_N04TAF",
+                   "AE15_N04TAF", "CC11_N04TAF","AE02_N04TAF",
+                   "AE18_N04TAF","CC13_N04TAF","AE25_N04TAF",
+                   "AX13_N04TAF","CA11_N04TAF","AX12_N04TAF",
+                   "AX25_N04TAF"
+                ) 
+kin_PWOCham_groupB <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupB, PWOCham_groupB]
+diag_lower <- lower.tri(kin_PWOCham_groupB, diag = FALSE)
+values_lower <- kin_PWOCham_groupB[diag_lower]
+mean_kin_PWOCham_groupB <- mean(values_lower)
+mean_kin_PWOCham_groupB
+
+
+PWOCham_groupC<- c( "AE06_N04TAF",  "AX03_N04TAF","CA25_N04TAF",
+                    "CC03_N04TAF","AE10_N04TAF","AE23_N04TAF",
+                    "AP25_N04TAF","CC10_N04TAF","CA22_N04TAF",
+                    "AP20_N04TAF","CC02_N04TAF","CC24_N04TAF",
+                    "CC01_N04TAF","CC07_N04TAF","CA18_N04TAF",
+                    "CA21_N04TAF","AP26_N04TAF","AE16_N04TAF",
+                    "CA10_N04TAF"  ) # Descarte la replica CC26r
+kin_PWOCham_groupC <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupC, PWOCham_groupC]
+diag_lower <- lower.tri(kin_PWOCham_groupC, diag = FALSE)
+values_lower <- kin_PWOCham_groupC[diag_lower]
+mean_kin_PWOCham_groupC <- mean(values_lower)
+mean_kin_PWOCham_groupC
+
+
+PWOCham_groupD<- c("AX21_N04TAF","AE01_N04TAF","CC30_N04TAF",
+                   "AP29_N04TAF","AP22_N04TAF","CA28_N04TAF",
+                   "AP03_N04TAF","AX27_N04TAF","CC23_N04TAF",
+                   "CC15_N04TAF","AX10_N04TAF","CA29_N04TAF",
+                   "AE12_N04TAF","AX22_N04TAF","AP27_N04TAF",
+                   "AX16_N04TAF","AE24_N04TAF","CA19_N04TAF",
+                   "CC16_N04TAF","CC20_N04TAF")
+kin_PWOCham_groupD <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupD, PWOCham_groupD]
+diag_lower <- lower.tri(kin_PWOCham_groupD, diag = FALSE)
+values_lower <- kin_PWOCham_groupD[diag_lower]
+mean_kin_PWOCham_groupD <- mean(values_lower)
+mean_kin_PWOCham_groupD
+
+
+Groups_ABCD<- c(PWOCham_groupA, PWOCham_groupB,
+                PWOCham_groupC, PWOCham_groupD)
+kin_Groups_ABCD <- kin_matrixRNat_ChamwoOutExterno[Groups_ABCD, Groups_ABCD]
+diag_lower <- lower.tri(kin_Groups_ABCD, diag = FALSE)
+values_lower <- kin_Groups_ABCD[diag_lower]
+mean_kin_Groups_ABCD <- mean(values_lower)
+mean_kin_Groups_ABCD
+
+```
+
+
+# RELATEDNESS BACKGROUND
+```{r}
+PWOCham_groupwoA<- c(PWOCham_groupB,PWOCham_groupC,PWOCham_groupD)
+kin_PWOCham_groupwoA <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupwoA, PWOCham_groupwoA]
+diag_lower <- lower.tri(kin_PWOCham_groupwoA, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoA[diag_lower]
+mean_kin_PWOCham_groupwoA <- mean(values_lower)
+mean_kin_PWOCham_groupwoA
+
+
+PWOCham_groupwoB<-  c(PWOCham_groupA,PWOCham_groupC,PWOCham_groupD)
+kin_PWOCham_groupwoB <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupwoB, PWOCham_groupwoB]
+diag_lower <- lower.tri(kin_PWOCham_groupwoB, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoB[diag_lower]
+mean_kin_PWOCham_groupwoB <- mean(values_lower)
+mean_kin_PWOCham_groupwoB
+
+
+PWOCham_groupwoC<- c(PWOCham_groupA,PWOCham_groupB,PWOCham_groupD)
+kin_PWOCham_groupwoC <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupwoC, PWOCham_groupwoC]
+diag_lower <- lower.tri(kin_PWOCham_groupwoC, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoC[diag_lower]
+mean_kin_PWOCham_groupwoC <- mean(values_lower)
+mean_kin_PWOCham_groupwoC
+
+
+
+PWOCham_groupwoD<-c(PWOCham_groupA,PWOCham_groupB,PWOCham_groupC)
+kin_PWOCham_groupwoD <- kin_matrixRNat_ChamwoOutExterno[PWOCham_groupwoD, PWOCham_groupwoD]
+diag_lower <- lower.tri(kin_PWOCham_groupwoD, diag = FALSE)
+values_lower <- kin_PWOCham_groupwoD[diag_lower]
+mean_kin_PWOCham_groupwoD <- mean(values_lower)
+mean_kin_PWOCham_groupwoD
+
+
+# Unir todos los vectores a eliminar
+vectores_a_eliminar <- c(PWOCham_groupA, PWOCham_groupB, PWOCham_groupC, PWOCham_groupD)
+
+# Crear un nuevo vector sin los elementos de los vectores a eliminar
+vector_filtr_background <- setdiff(orden_columnas_RNat_ChamwoOutExterno, vectores_a_eliminar)
+
+kin_filtr_background <- kin_matrixRNat_ChamwoOutExterno[vector_filtr_background, vector_filtr_background]
+diag_lower <- lower.tri(kin_filtr_background, diag = FALSE)
+values_lower <- kin_filtr_background[diag_lower]
+mean_kin_filtr_background <- mean(values_lower)
+mean_kin_filtr_background
+
+```
+
+
+# MAKE TABLES AND EXPORT DATA
+
+```{r}
+# Crear un data frame vacío
+df <- data.frame(ID = character(), GroupMatrix = character(), stringsAsFactors = FALSE)
+
+# Función para combinar los vectores
+combine_vectors <- function(vector, name_of_vector) {
+  data <- data.frame(ID = vector, GroupMatrix = name_of_vector, stringsAsFactors = FALSE)
+  return(data)
+}
+
+# Combinar los vectores
+df <- rbind(df, combine_vectors(PWOCham_groupA, "PWOCham_groupA"))
+df <- rbind(df, combine_vectors(PWOCham_groupB, "PWOCham_groupB"))
+df <- rbind(df, combine_vectors(PWOCham_groupC, "PWOCham_groupC"))
+df <- rbind(df, combine_vectors(PWOCham_groupD, "PWOCham_groupD"))
+df
+
+# Exportar el data frame a un archivo .txt
+write.table(df, file = "../outputs/df_GroupsMatrixPWOCham.txt", sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
+
+
+
+
+# Crear un data frame con los nombres y valores
+df_promedios_Rel <- data.frame(
+  Group = c("mean_kin_PWOCham_groupA","mean_kin_PWOCham_groupB", "mean_kin_PWOCham_groupC", "mean_kin_PWOCham_groupD",
+            
+"mean_kin_PWOCham_groupwoA","mean_kin_PWOCham_groupwoB", "mean_kin_PWOCham_groupwoC", "mean_kin_PWOCham_groupwoD", 
+
+"mean_kin_filtr_background", "mean_kin_Groups_ABCD",
+"mean_kin_PWOCham","mean_kin_PWORNat" ),
+  MeanRel = c(
+    mean_kin_PWOCham_groupA, mean_kin_PWOCham_groupB, mean_kin_PWOCham_groupC, mean_kin_PWOCham_groupD, 
+    
+mean_kin_PWOCham_groupwoA, mean_kin_PWOCham_groupwoB, mean_kin_PWOCham_groupwoC, mean_kin_PWOCham_groupwoD,
+
+mean_kin_filtr_background, mean_kin_Groups_ABCD,
+mean_kin_PWOCham,mean_kin_PWORNat)
+)
+
+# Exportar a un archivo txt
+write.table(df_promedios_Rel, "../outputs/promedios_RelPWOCham.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+```
+
+
+# Load filess para Anotaciones
+```{r}
+info_june <- read_excel("../metadata/Chambers_mesures_All/June.xlsx", sheet = 1)  # Usa el número o nombre de la hoja
+info_oct <- read_excel("../metadata/Chambers_mesures_All/October.xlsx", sheet = 1)  # Usa el número o nombre de la hoja
+info_ene <- read_excel("../metadata/Chambers_mesures_All/January.xlsx", sheet = 1)  # Usa el número o nombre de la hoja
+
+# Add column about damage ozone condition and dead status
+info_june$suv_damozo <- paste(info_june$survivors, info_june$ozone_damage, sep = "_")
+info_oct$suv_damozo <- paste(info_oct$survivors, info_oct$ozone_damage, sep = "_")
+info_ene$suv_damozo <- paste(info_ene$survivors, info_ene$ozone_damage, sep = "_")
+
+df_info_GBS <- info_GBS %>%
+  filter(Treatment != "blank")
+
+
+df_info_GBS$PercentageOzo <- gsub(" ", "_", df_info_GBS$ozone_damage_percentage)   # Reemplaza espacios por guiones bajos
+
+df_info_GBS <- df_info_GBS %>%
+  mutate(PercentageOzo2 = ifelse(tree_health_simplified == "healthy", "0%", PercentageOzo))
+
+
+#Merge df
+
+df_june_merge <- merge(df_info_GBS, info_june, by.x = "Sample_Name_Plate", by.y = "ID", all.x = TRUE)
+
+df_oct_merge <- merge(df_info_GBS, info_oct, by.x = "Sample_Name_Plate", by.y = "ID", all.x = TRUE)
+
+df_ene_merge <- merge(df_info_GBS, info_ene, by.x = "Sample_Name_Plate", by.y = "ID", all.x = TRUE)
+
+
+colnames(df_june_merge)[colnames(df_june_merge) == "Sample_Name_Plate"] <- "ID"
+colnames(df_oct_merge)[colnames(df_oct_merge) == "Sample_Name_Plate"] <- "ID"
+
+colnames(df_ene_merge)[colnames(df_ene_merge) == "Sample_Name_Plate"] <- "ID"
+
+
+
+
+```
+
+
+## JUNIO
+```{r}
+#
+info_symtoms_june<-  df_june_merge[, c("ID", "suv_damozo")] #Seleccionar ID y caracyter de interes a visualizar
+info_symtoms_junedf <- as.data.frame(info_symtoms_june) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_symtoms_junedf) <- info_symtoms_junedf$ID # Asegurar que los IDs sean nombres de fila
+annot_jun <- data.frame(Group = info_symtoms_junedf$suv_damozo) # Extraer la variable de interés
+rownames(annot_jun) <- rownames(info_symtoms_junedf)         # Mantener IDs de muestras
+
+colnames(annot_jun) <-"Phenotype"  # Cambia los nombres de las variables en la leyenda
+
+
+```
+
+
+## OCTUBRE Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_symtoms_oct<-  df_oct_merge[, c("ID", "suv_damozo")] #Seleccionar ID y caracyter de interes a visualizar
+info_symtoms_octdf <- as.data.frame(info_symtoms_oct) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_symtoms_octdf) <- info_symtoms_octdf$ID # Asegurar que los IDs sean nombres de fila
+annot_oct <- data.frame(Group = info_symtoms_octdf$suv_damozo) # Extraer la variable de interés
+rownames(annot_oct) <- rownames(info_symtoms_octdf)         # Mantener IDs de muestras
+
+colnames(annot_oct) <-"Phenotype"  # Cambia los nombres de las variables en la leyenda
+
+```
+
+
+## ENERO Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_symtoms_ene<-  df_ene_merge[, c("ID", "suv_damozo")] #Seleccionar ID y caracyter de interes a visualizar
+info_symtoms_enedf <- as.data.frame(info_symtoms_ene) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_symtoms_enedf) <- info_symtoms_enedf$ID # Asegurar que los IDs sean nombres de fila
+annot_ene <- data.frame(Group = info_symtoms_enedf$suv_damozo) # Extraer la variable de interés
+rownames(annot_ene) <- rownames(info_symtoms_enedf)         # Mantener IDs de muestras
+
+colnames(annot_ene) <-"Phenotype"  # Cambia los nombres de las variables en la leyenda
+
+
+```
+
+
+## CHAMBERS Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+info_chamber<-  df_june_merge[, c("ID", "chamber_number")] #Seleccionar ID y caracyter de interes a visualizar
+
+info_chamberdf <- as.data.frame(info_chamber) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_chamberdf) <- info_chamberdf$ID # Asegurar que los IDs sean nombres de fila
+annot_cham <- data.frame(Group = info_chamberdf$chamber_number) # Extraer la variable de interés
+rownames(annot_cham) <- rownames(info_chamberdf)         # Mantener IDs de muestras
+
+colnames(annot_cham) <-"Chamber"  # Cambia los nombres de las variables en la leyenda
+
+```
+
+
+## TREATMENT Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+
+info_june$treatment
+info_treatment<-  df_june_merge[, c("ID", "treatment")] #Seleccionar ID y caracyter de interes a visualizar
+info_treatmentdf <- as.data.frame(info_treatment) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_treatmentdf) <- info_treatmentdf$ID # Asegurar que los IDs sean nombres de fila
+annot_treatment <- data.frame(Group = info_treatmentdf$treatment) # Extraer la variable de interés
+rownames(annot_treatment) <- rownames(info_treatmentdf)         # Mantener IDs de muestras
+
+colnames(annot_treatment) <-"Treatment"  # Cambia los nombres de las variables en la leyenda
+
+```
+## TREATMENT Crear un dataframe de anotaciones con colores para fenootipo despues del tratamiento ozono
+
+```{r}
+#
+
+
+info_damage_percentage<-  df_june_merge[, c("ID", "PercentageOzo2")] #Seleccionar ID y caracyter de interes a visualizar
+info_ozonedamagedperdf <- as.data.frame(info_damage_percentage) # Convertir a df porque tibbles no funcionan
+
+
+rownames(info_ozonedamagedperdf) <- info_ozonedamagedperdf$ID # Asegurar que los IDs sean nombres de fila
+annot_ozonedamagedperdf <- data.frame(Group = info_ozonedamagedperdf$PercentageOzo2) # Extraer la variable de interés
+rownames(annot_ozonedamagedperdf) <- rownames(info_ozonedamagedperdf)         # Mantener IDs de muestras
+
+colnames(annot_ozonedamagedperdf) <-"PercentageOzonedamage"  # Cambia los nombres de las variables en la leyenda
+
+```
+## MIX 2
+
+```{r}
+#MIX JUNIO
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix2 <- data.frame(
+  Chamber = annot_cham,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix2)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamwoOutCham)  # Número de filas en la matriz de calor
+```
+## MIX 3
+
+```{r}
+#MIX JUNIO
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix3 <- data.frame(
+  Phenotype = annot_jun,
+  Chamber = annot_cham,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix3)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamwoOutCham)  # Número de filas en la matriz de calor
+```
+
+```{r}
+#MIX4
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix4 <- data.frame(
+  Phenotype = annot_jun,
+  PercentageDamageOzo = annot_ozonedamagedperdf,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix4)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamwoOutCham)  # Número de filas en la matriz de calor
+```
+## MIX
+
+```{r}
+#MIX JUNIO
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix <- data.frame(
+  Phenotype = annot_jun,
+ Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamwoOutCham)  # Número de filas en la matriz de calor
+```
+
+
+
+```{r}
+#MIX OCTUBRE
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix_oct <- data.frame(
+  Phenotype = annot_oct,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix_oct)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamwoOutExterno)  # Número de filas en la matriz de calor
+
+```
+
+```{r}
+#MIX ENE
+
+# Anotaciones para filas y columnas (deben ser un data frame con múltiples columnas si hay más de una anotación)
+annot_mix_ene <- data.frame(
+  Phenotype = annot_ene,
+  Treatment = annot_treatment) # Segunda anotación
+
+
+nrow(annot_mix_ene)  # Número de filas en anotaciones
+nrow(kin_matrixRNat_ChamwoOutExterno)  # Número de filas en la matriz de calor
+
+```
+
+#PHEATMAPS
+
+```{r}
+#JUNIO
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_jun, 
+         annotation_col = annot_jun, 
+         annotation_colors = ann_colors_surv,
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham JUNIO sin outliers y sin replicas",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+```
+
+
+
+```{r}
+#OCTUBRE
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_oct, 
+         annotation_col = annot_oct, 
+         annotation_colors = ann_colors_surv,
+         display_numbers = FALSE,
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham OCTUBRE sin outliers y sin replicas",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+
+
+
+```
+
+```{r}
+#ENERO
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_ene, 
+         annotation_col = annot_ene, 
+         annotation_colors = ann_colors_surv,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham ENERO sin outliers ni replicas",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+
+
+```
+
+
+
+
+```{r}
+#CHAMBERS
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_cham, 
+         annotation_col = annot_cham, 
+         annotation_colors = ann_colors_cham,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham CHAMBERS",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+
+
+
+```
+
+
+```{r}
+# TREATMENT
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_treatment, 
+         annotation_col = annot_treatment, 
+         annotation_colors = ann_colors_treatment,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham TREATMENT",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+```{r}
+#MIX2
+
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_mix2, 
+         annotation_col = annot_mix2, 
+         annotation_colors = ann_colors_mix2,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX JUNIO",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+```{r}
+#MIX3
+
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_mix3, 
+         annotation_col = annot_mix3, 
+         annotation_colors = ann_colors_mix3,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX JUNIO",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutCham)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutCham)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+```{r}
+#MIX JUNIO
+
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_mix, 
+         annotation_col = annot_mix, 
+         annotation_colors = ann_colors_mix,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX JUNIO",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutExterno)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutExterno)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+```{r}
+#MIX OCT
+
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_mix_oct, 
+         annotation_col = annot_mix_oct, 
+         annotation_colors = ann_colors_mix,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX OCT",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutExterno)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutExterno)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+
+```{r}
+#MIX ENE
+
+
+pheatmap(kin_matrixRNat_ChamwoOutCham, 
+         annotation_row = annot_mix_ene, 
+         annotation_col = annot_mix_ene, 
+         annotation_colors = ann_colors_mix,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOCham MIX ENE",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutExterno)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutExterno)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+#Forest Natural Chamber
+
+
+```{r}
+#
+
+
+pheatmap(kin_matrixRNat_ChamwoOutExterno, 
+         annotation_row = annot_mix4, 
+         annotation_col = annot_mix4, 
+         annotation_colors = ann_colors_mix4,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones RNat_ChamWOut y EXTERNO",
+         labels_row = rep("", nrow(kin_matrixRNat_ChamwoOutExterno)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRNat_ChamwoOutExterno)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+
+```{r}
+#
+
+
+pheatmap(kin_matrixRef_ChamOut, 
+         annotation_row = annot_mix4, 
+         annotation_col = annot_mix4, 
+         annotation_colors = ann_colors_mix4,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones Ref_ChamWOut",
+         labels_row = rep("", nrow(kin_matrixRef_ChamOut)),# Elimina las etiquetas de filas
+         labels_col = rep("", ncol(kin_matrixRef_ChamOut)) #Elimina las etiquetas de columnas
+         )
+
+```
+
+```{r}
+#
+
+
+pheatmap(kin_matrixMother_ChamWO, 
+         annotation_row = annot_mix4, 
+         annotation_col = annot_mix4, 
+         annotation_colors = ann_colors_mix4,
+         display_numbers = FALSE, 
+         color = colorRampPalette(c("blue", "white", "red"))(100),
+         main = "Matriz de Parentesco (IBD) con Anotaciones Mother_ChamWO",
+         labels_row = rep("", nrow(kin_matrixMother_ChamWO)),# Elimina las etiquetas de filas
+         )
+
+```
+

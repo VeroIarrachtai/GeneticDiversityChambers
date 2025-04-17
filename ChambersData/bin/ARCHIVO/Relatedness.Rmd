@@ -9,7 +9,6 @@ output:
     theme: "yeti"
   pdf_document: default
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -25,7 +24,6 @@ library(pheatmap)
 library(reshape2)
 library("readxl")
 library(factoextra)
-library(dplyr)
 
 ```
 
@@ -39,7 +37,7 @@ head(info_GBS)
 
 ```
 
-# Make vectors to subsets in vcftools and df shorts to R
+
 ```{r}
 
 ##### Obtener muestras
@@ -97,36 +95,30 @@ vector_motrefcham <- c( info_GBS_mother$Sample_Name_Plate, info_GBS_refo$Sample_
 vector_motnatcham <- c(info_GBS_mother$Sample_Name_Plate, info_GBS_natural$Sample_Name_Plate, info_GBS_chamber$Sample_Name_Plate)
 
 
-# Crear un vector con datos de ambas columnas
-vector_nat <- c(info_GBS_mother$Sample_Name_Plate, info_GBS_natural$Sample_Name_Plate)
-
-
-# Crear un vector con datos de ambas columnas
-vector_ref <- c(info_GBS_refo$Sample_Name_Plate)
-
 ```
 
-## Export vectors
+
 ```{r}
+
 
 # Guardar el vector en un archivo de texto (en formato de texto plano)
 write(vector_refycham, file = "../outputs/vectors_VCF/datos_vcf_refycham.txt")
-write(vector_natycham, file = "../outputs/vectors_VCF/datos_vcf_natycham.txt")
+write(vector_natycham, file = "../outputs/vectors_VCF/datos_vcf_vector_natycham.txt")
 write(vector_motherycham, file = "../outputs/vectors_VCF/datos_vcf_motherycham.txt")
 write(vector_transmotcham, file = "../outputs/vectors_VCF/datos_vcf_transmotcham.txt")
 write(vector_transmotrefcham, file = "../outputs/vectors_VCF/datos_vcf_transmotrefcham.txt")
 write(vector_transmotnatcham, file = "../outputs/vectors_VCF/datos_vcf_transmotnatcham.txt")
 write(vector_motrefcham, file = "../outputs/vectors_VCF/datos_vcf_motrefcham.txt")
 write(vector_motnatcham, file = "../outputs/vectors_VCF/datos_vcf_motnatcham.txt")
-write(vector_ref, file = "../outputs/vectors_VCF/datos_vcf_ref.txt")
-write(vector_nat, file = "../outputs/vectors_VCF/datos_vcf_nat.txt")
 
 ```
 
 
-# Anotaciones colores
-```{r}
 
+
+#anotaciones colores
+```{r}
+#
 # Definir colores para los estados
 ann_colors_surv <- list(Phenotype = c("dead_NA" = "black","survive_0" = "lightgreen", "survive_1" = "lightpink"))
 
@@ -169,14 +161,16 @@ ann_colors_mix <- list(
 
 ```
 
-# All SNPS 
+
+
+
+# TMNC 
 
 ### Convertir VCF a formato GDS
 ```{r}
 #Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
 vcf_GBS.fn <- "../../../../VCF/all_GBS.vcf"
-
-gds_GBS.fn <- "ALLsnps.gds"
+gds_GBS.fn <- "GBS.gds"
 snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
 
 # Abrir archivo GDS
@@ -199,10 +193,10 @@ genofileGBS <- snpgdsOpen(gds_GBS.fn)
 #Crear archivo snpgdsIBDKING
 kinshipGBS<- snpgdsIBDKING(genofileGBS)
 
-kin_matrixGBSAll  <- kinshipGBS$kinship
+kin_matrixGBS  <- kinshipGBS$kinship
 
 # Asignar nombres a filas y columnas (importante para identificación)
-rownames(kin_matrixGBSAll) <- colnames(kin_matrixGBSAll) <- kinshipGBS$sample.id
+rownames(kin_matrixGBS) <- colnames(kin_matrixGBS) <- kinshipGBS$sample.id
 
 ```
 
@@ -210,181 +204,42 @@ rownames(kin_matrixGBSAll) <- colnames(kin_matrixGBSAll) <- kinshipGBS$sample.id
 
 ```{r}
 
-pheatmap(kin_matrixGBSAll, 
+pheatmap(kin_matrixGBS, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) All SNPs",
+         main = "Matriz de Parentesco (IBD) GBS",
          labels_row = rep("", nrow(kin_matrixGBS)),# Elimina las etiquetas de filas
          labels_col = rep("", ncol(kin_matrixGBS)) #Elimina las etiquetas de columnas
          )
 ```
-
-## List order heatmap
-
 ```{r }
 #Generar un objeto con el pheatmap
 
 
-p <-pheatmap(kin_matrixGBSAll, 
+p <-pheatmap(kin_matrixGBS, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) All SNPs",
+         main = "Matriz de Parentesco (IBD) GBS",
          legend = TRUE,          # Asegurarse de que la leyenda esté activa
          legend_height = 0.5)
 
 #Extraer orden de las muestras
-orden_columnas <- colnames(kin_matrixGBSAll)[p$tree_col$order]
-
-print(orden_columnas)
-```
-
-# Casi Neutrales 
-
-### Convertir VCF a formato GDS
-```{r}
-#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
-vcf_GBS.fn <- "../../../../VCF/set_casi_neutral.recode.vcf"
-
-gds_GBS.fn <- "casiN.gds"
-snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
-
-# Abrir archivo GDS
-genofileGBS <- snpgdsOpen(gds_GBS.fn)
-
-```
-
-
-### RELATEDNESS aLL GBS
-```{r}
-# Calcular coeficientes de parentesco
-
-#0.5 ≈ gemelos idénticos
-#0.25 ≈ hermanos completos o padre-hijo
-#0.125 ≈ primos
-#0 ≈ no relacionados
-#Puede dar valores negativos cuando no hay relación entre muestras.
-
-
-#Crear archivo snpgdsIBDKING
-kinshipGBS<- snpgdsIBDKING(genofileGBS)
-
-kin_matrixGBSNeut  <- kinshipGBS$kinship
-
-# Asignar nombres a filas y columnas (importante para identificación)
-rownames(kin_matrixGBSNeut) <- colnames(kin_matrixGBSNeut) <- kinshipGBS$sample.id
-
-```
-
-### Plot relatedness con ALL GBS
-
-```{r}
-
-pheatmap(kin_matrixGBSNeut, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) Casi Neutrales",
-         labels_row = rep("", nrow(kin_matrixGBS)),# Elimina las etiquetas de filas
-         labels_col = rep("", ncol(kin_matrixGBS)) #Elimina las etiquetas de columnas
-         )
-```
-## List order heatmap
-
-```{r }
-#Generar un objeto con el pheatmap
-
-
-p <-pheatmap(kin_matrixGBSNeut, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) Casi Neutrales",
-         legend = TRUE,          # Asegurarse de que la leyenda esté activa
-         legend_height = 0.5)
-
-#Extraer orden de las muestras
-orden_columnas <- colnames(kin_matrixGBSNeut)[p$tree_col$order]
-print(orden_columnas)
-```
-
-# Casi Atipicos
-
-### Convertir VCF a formato GDS
-```{r}
-#Inclute muestras de transcriptomica, muestras madre, muestras de regeneracion natural y las camaras
-vcf_GBS.fn <- "../../../../VCF/set_casi_atipico.recode.vcf"
-
-gds_GBS.fn <- "casiAti.gds"
-snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
-
-# Abrir archivo GDS
-genofileGBS <- snpgdsOpen(gds_GBS.fn)
-
-```
-
-
-### RELATEDNESS aLL GBS
-```{r}
-# Calcular coeficientes de parentesco
-
-#0.5 ≈ gemelos idénticos
-#0.25 ≈ hermanos completos o padre-hijo
-#0.125 ≈ primos
-#0 ≈ no relacionados
-#Puede dar valores negativos cuando no hay relación entre muestras.
-
-
-#Crear archivo snpgdsIBDKING
-kinshipGBS<- snpgdsIBDKING(genofileGBS)
-
-kin_matrixGBSAti  <- kinshipGBS$kinship
-
-# Asignar nombres a filas y columnas (importante para identificación)
-rownames(kin_matrixGBSAti) <- colnames(kin_matrixGBSAti) <- kinshipGBS$sample.id
-
-```
-
-### Plot relatedness con ALL GBS
-
-```{r}
-
-pheatmap(kin_matrixGBSAti, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) casi Atipicos",
-         labels_row = rep("", nrow(kin_matrixGBS)),# Elimina las etiquetas de filas
-         labels_col = rep("", ncol(kin_matrixGBS)) #Elimina las etiquetas de columnas
-         )
-```
-
-## List order heatmap
-
-```{r }
-#Generar un objeto con el pheatmap
-
-
-p <-pheatmap(kin_matrixGBSAti, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) Casi Atipicos",
-         legend = TRUE,          # Asegurarse de que la leyenda esté activa
-         legend_height = 0.5)
-
-#Extraer orden de las muestras
-orden_columnas <- colnames(kin_matrixGBSAti)[p$tree_col$order]
-
+orden_columnas <- colnames(kin_matrixGBS)[p$tree_col$order]
 print(orden_columnas)
 ```
 
 
 
-# Get vector specific for groups
+##Extraer Muestras de regeneracion Natural y las de las Camaras
 
 ```{r}
-library(readr) #Leer csv
-
 #Cargar df con datos de muestras secuenciadas en GBS
-info_GBSMon <- info_GBS
+info_GBSMon <- read_csv("../../SecuencingData/outputs/df_GBS_metadata.csv")  # Usa el número o nombre de la hoja
 
-# Filtra las filas 
+# Crear vectores con muestras de interes
+
+# Filtra las filas donde 'treatment' contiene "Chambers" y extrae la columna 'Simple_Name_Plate'
+
 chambers <- info_GBSMon %>%
   filter(Treatment %in% c("contingency_ozone", "moderate_ozone", "ambient_air_IE", "purified_air", "ambient_air_SRX")) %>%
   pull(Sample_Name_Plate)
@@ -409,23 +264,19 @@ Gametophyte <- info_GBSMon %>%
   filter(Treatment == "gametophyte") %>%
   pull(Sample_Name_Plate)
 
-Blank <- info_GBSMon %>%
-  filter(Treatment == "blank") %>%
-  pull(Sample_Name_Plate)
-
 ```
 
-# RELATEDNESS Forest RNatural y Chambers
+#RELATEDNESS forest RNatural y Chambers
 
-## Extraer Muestras de regeneracion Natural y las de las Camaras
 ```{r}
 #Descartar muestras
-samples_to_remove <- c(forestRef, Gametophyte, Transcriptomic, Blank)
+samples_to_remove <- c(forestRef, Gametophyte, Transcriptomic)
 
 # Filtrar la matriz eliminando las muestras en filas y columnas
-kin_matrixRNat_Cham <- kin_matrixGBS[!rownames(kin_matrixGBSAti) %in% samples_to_remove, 
-                                !colnames(kin_matrixGBSAti) %in% samples_to_remove]
+kin_matrixRNat_Cham <- kin_matrixGBS[!rownames(kin_matrixGBS) %in% samples_to_remove, 
+                                !colnames(kin_matrixGBS) %in% samples_to_remove]
 ```
+
 
 ### Plot relatedness con RNatural y Chambers
 
@@ -449,7 +300,7 @@ pheatmap(kin_matrixRNat_Cham,
 p <-pheatmap(kin_matrixRNat_Cham, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) con RNatural y Chambers",
+         main = "Matriz de Parentesco (IBD) GBS",
          legend = TRUE,          # Asegurarse de que la leyenda esté activa
          legend_height = 0.5)
 
@@ -457,7 +308,7 @@ p <-pheatmap(kin_matrixRNat_Cham,
 orden_columnas_RNat_Cham <- colnames(kin_matrixRNat_Cham)[p$tree_col$order]
 print(orden_columnas_RNat_Cham)
 ```
-# RELATEDNESS Natural y chambers 
+
 ##Eliminar OUTLIERS y REPLICAS
 
 ```{r}
@@ -469,7 +320,7 @@ nombres_con_r <- orden_columnas_RNat_Cham[grepl("r", orden_columnas_RNat_Cham, i
 print(nombres_con_r)
 
 #Descartar muestras
-samples_to_remove <- c( "H53_N6P12", "AE22_N04TAF", "I58_N12P21", "K14_NNAP5", "A115_N12P40", "D65_N7P18", "A135_N08P46", "I81_N13P29",
+samples_to_remove <- c("AE22_N04TAF","D65_N7P18","H53_N6P12","A115_N12P40","A135_N08P46",
                        "M2r_N5P9","CA10r_N04TAF","PP4r_NNAP1","B103r_N11P34","AMP08r_NNAPNA",
                        "K11r_N4P1","CC26r_N04TAF","AMP05r_NNAPNA","F101r_N9P32" )
 
@@ -486,7 +337,7 @@ kin_matrixRNat_ChamWO <- kin_matrixRNat_Cham[!rownames(kin_matrixRNat_Cham) %in%
 pheatmap(kin_matrixRNat_ChamWO, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) con RNatural y Chambers WO OUTLIERS",
+         main = "Matriz de Parentesco (IBD) con RNatural y Chambers WO",
          labels_row = rep("", nrow(kin_matrixRNat_ChamWO)),# Elimina las etiquetas de filas
          labels_col = rep("", ncol(kin_matrixRNat_ChamWO)) #Elimina las etiquetas de columnas
          )
@@ -507,60 +358,7 @@ orden_columnas_RNat_ChamWO <- colnames(kin_matrixRNat_ChamWO)[p$tree_col$order]
 print(orden_columnas_RNat_ChamWO)
 ```
 
-#RELATENESS Reforested
-
-```{r}
-#Elimino los outliers (relatedness negativas) y muestras replicas
-orden_columnas_RNat_ChamWO
-
-
-#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
-nombres_con_forestRNat <- orden_columnas_RNat_ChamWO[!grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamWO )]
-print(nombres_con_forestRNat)
-
-#Descartar muestras
-samples_to_remove <- nombres_con_forestRNat
-
-# Filtrar la matriz eliminando las muestras en filas y columnas
-kin_matrixRNat_ChamWOCham <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_ChamWO) %in% samples_to_remove,
-                                                  !colnames(kin_matrixRNat_ChamWO) %in% samples_to_remove]
-
-```
-
-```{r}
-
-pheatmap(kin_matrixRNat_ChamWOCham, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY CHAMBERS",
-         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
-         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
-         )
-```
-
-
-##Extraer orden de samples
-```{r }
-#Generar un objeto con el pheatmap
-
-p <-pheatmap(kin_matrixRNat_ChamWOCham, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY Chambers",
-         legend = TRUE,          # Asegurarse de que la leyenda esté activa
-         legend_height = 0.5)
-
-# Visualizar la estructura del dendrograma
-plot(p$tree_row)
-
-#Extraer orden de las muestras
-orden_columnas_RNat_ChamWOCham <- colnames(kin_matrixRNat_ChamWOCham)[p$tree_col$order]
-print(orden_columnas_RNat_ChamWOCham)
-```
-
-
-
-#RELATENESS forest Natural
+#RELATENESS forest RNatural
 
 ```{r}
 #Elimino los outliers (relatedness negativas) y muestras replicas
@@ -581,14 +379,14 @@ kin_matrixRNat_ChamWORNat <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_Cham
 ```
 
 
-### Plot relatedness ONLY chmabers
+### Plot relatedness con RNatural y Chambers WO RNAT
 
 ```{r}
 
 pheatmap(kin_matrixRNat_ChamWORNat, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY Natural",
+         main = "Matriz de Parentesco (IBD) WO RNAT",
          labels_row = rep("", nrow(kin_matrixRNat_ChamWORNat)),# Elimina las etiquetas de filas
          labels_col = rep("", ncol(kin_matrixRNat_ChamWORNat)) #Elimina las etiquetas de columnas
          )
@@ -601,7 +399,7 @@ pheatmap(kin_matrixRNat_ChamWORNat,
 p <-pheatmap(kin_matrixRNat_ChamWORNat, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY Natural",
+         main = "Matriz de Parentesco (IBD) WO RNAT",
          legend = TRUE,          # Asegurarse de que la leyenda esté activa
          legend_height = 0.5)
 
@@ -611,7 +409,7 @@ print(orden_columnas_RNat_ChamWORNat)
 
 ```
 
-#RELATENESS ONLY chambers
+#RELATENESS chambers
 
 ```{r}
 #Elimino los outliers (relatedness negativas) y muestras replicas
@@ -632,18 +430,19 @@ kin_matrixRNat_ChamWOCham <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_Cham
 ```
 
 
-### Plot relatedness con ONLY Chambers 
+### Plot relatedness con RNatural y Chambers WO RNAT
 
 ```{r}
 
 pheatmap(kin_matrixRNat_ChamWOCham, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY CHAMBERS",
+         main = "Matriz de Parentesco (IBD) WO CHAMBERS",
          labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
          labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
          )
 ```
+
 
 
 ##Extraer orden de samples
@@ -653,7 +452,7 @@ pheatmap(kin_matrixRNat_ChamWOCham,
 p <-pheatmap(kin_matrixRNat_ChamWOCham, 
          display_numbers = FALSE, 
          color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY Chambers",
+         main = "Matriz de Parentesco (IBD) WO Cham",
          legend = TRUE,          # Asegurarse de que la leyenda esté activa
          legend_height = 0.5)
 
@@ -665,58 +464,6 @@ orden_columnas_RNat_ChamWOCham <- colnames(kin_matrixRNat_ChamWOCham)[p$tree_col
 print(orden_columnas_RNat_ChamWOCham)
 ```
 
-
-
-#RELATENESS ONLY chambers con arboles potencialmente semilleros
-
-```{r}
-#Elimino los outliers (relatedness negativas) y muestras replicas
-orden_columnas_RNat_ChamWO
-
-
-#Descartar muestras que empiezan "CC", "CA" o "AE" "AP", "AX"
-nombres_con_forestRNat <- orden_columnas_RNat_ChamWO[!grepl("^CC|^CA|^AE|^AP|^AX", orden_columnas_RNat_ChamWO )]
-print(nombres_con_forestRNat)
-
-#Descartar muestras
-samples_to_remove <- nombres_con_forestRNat
-
-# Filtrar la matriz eliminando las muestras en filas y columnas
-kin_matrixRNat_ChamWOCham <- kin_matrixRNat_ChamWO[!rownames(kin_matrixRNat_ChamWO) %in% samples_to_remove,
-                                                  !colnames(kin_matrixRNat_ChamWO) %in% samples_to_remove]
-
-```
-
-```{r}
-
-pheatmap(kin_matrixRNat_ChamWOCham, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY CHAMBERS",
-         labels_row = rep("", nrow(kin_matrixRNat_ChamWOCham)),# Elimina las etiquetas de filas
-         labels_col = rep("", ncol(kin_matrixRNat_ChamWOCham)) #Elimina las etiquetas de columnas
-         )
-```
-
-
-##Extraer orden de samples
-```{r }
-#Generar un objeto con el pheatmap
-
-p <-pheatmap(kin_matrixRNat_ChamWOCham, 
-         display_numbers = FALSE, 
-         color = colorRampPalette(c("blue", "white", "red"))(100),
-         main = "Matriz de Parentesco (IBD) ONLY Chambers",
-         legend = TRUE,          # Asegurarse de que la leyenda esté activa
-         legend_height = 0.5)
-
-# Visualizar la estructura del dendrograma
-plot(p$tree_row)
-
-#Extraer orden de las muestras
-orden_columnas_RNat_ChamWOCham <- colnames(kin_matrixRNat_ChamWOCham)[p$tree_col$order]
-print(orden_columnas_RNat_ChamWOCham)
-```
 
 
 # RELATEDNESS by GENETICS GROUPS
@@ -2428,5 +2175,9 @@ summary(model7)
 
 
 ```
+
+
+
+
 
 

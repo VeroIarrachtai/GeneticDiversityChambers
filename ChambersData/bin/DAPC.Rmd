@@ -1,7 +1,13 @@
 ---
 title: "DAPC"
-output: html_document
+author: "Vero"
 date: "2025-03-11"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: "yeti"
+  pdf_document: default
 ---
 
 
@@ -9,82 +15,386 @@ date: "2025-03-11"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
-
-########## find.cluster + dapc #######
-# creamos un genlight
-vcfR_chambers <- read.vcfR("../../../../VCF/vcf_filtrado_ozoned.vcf")
-vcf_chambers<-vcfR2genlight(vcfR_chambers)
+```{r,  include=FALSE}
+library(adegenet)
+library(vcfR)
 
 ```
 
+# Samples Chambers sin camaras de SRX (AX)
+
+A partir del vcf de SNPs neutros, se seleccionaron solamente las muestras de AP (Aire purificado), AE (Aire Ecologia), CC (moderado de ozono), CA (contingencia de ozono). Con ellas se creo un objeto genlight. 75 muestras con 1,813 SNPs
+
+## Creamos un objeto Genlight
+```{r}
+########## find.cluster + dapc #######
+# creamos un genlight
+# El vcf es de todos los SNPs
+vcfR_chambers <- read.vcfR("../../../../VCF/GBSM_Fenotype_APAECCCA.recode.vcf")
+vcf_chambers<-vcfR2genlight(vcfR_chambers)
+vcf_chambers
+```
+## Identificamos clusters
+
+La identificación de los clústeres se realiza mediante find.clusters. Esta función primero transforma los datos mediante PCA, solicitando que se especifique interactivamente el número de PC retenidos, a menos que se proporcione el argumento n.pca. A continuación, ejecuta el algoritmo k-means con valores crecientes de k, a menos que se proporcione el argumento n.clust, y calcula las estadísticas de resumen asociadas (por defecto, BIC). 
+max.n.clust = 20 Prueba hasta 20 agrupamientos
+n.pca = 70 utiliza hasta 70 pca
+ 
 
 ```{r}
 
-# corremos find.cluster, se escoje un numero maximo de clusters por si existe un efecto placa,
-grp <- find.clusters(vcf_chambers, max.n.clust = 10, n.pca = 200, choose = FALSE, stat = "BIC", method = "kmeans")
+# corremos find.cluster, se escoje un numero maximo de clusters 
+grp <- find.clusters(vcf_chambers, max.n.clust = 20, n.pca = 70, choose = FALSE, stat = "BIC", method = "kmeans")
+
 plot(grp$Kstat, type = "o", xlab = "numero de grupos (K)",
      ylab = "BIC",
      main = "find.clusters")
 
-grp$grp
+```
+
+Las muestras se distribuyen entre 3 y 4 grupos. Exportamos los grupos a los que pertenecen en un csv con find.cluster
+
+```{r}
+
+# guardamos los resultados de agrupamiento
+grupos_formados <- as.data.frame(grp$grp)
+write.csv(grupos_formados, "../outputs/grupos_formados_find.clusters_Chambers_AX.csv")
+
+```
+
+## Identificamos PC
+```{r}
+
+# corremos dapc con los grupos formados
+dapc1 <- dapc(vcf_chambers, grp$grp, n.pca = 70, n.da = 3) 
+
+temp <- optim.a.score(dapc1)
+
+```
+Los primero 5 pca son los optimos.
+
+## Correr DAPC con PC y DA seleccionados
+```{r}
+# corremos dapc con los grupos formados
+dapc1 <- dapc(vcf_chambers, grp$grp, n.pca = 5, n.da = 3) 
+
+dapc1
+```
+
+## Scatter plot dimentions
+```{r}
+
+myCol <- c("darkblue","purple","green","orange","red","blue")
+
+scatter(dapc1, scree.da=T, bg="white",scree.pca=TRUE, pch=20, cell=0, cstar=0, col=myCol, solid=.4,
+cex=3,clab=0, leg=TRUE, txt.leg=paste("Cluster",1:6))
+```
+
+## Scatter plot mountains
+```{r}
+scatter(dapc1,1,1, col=myCol, bg="white",
+scree.da=FALSE, legend=TRUE, solid=.4)
+
+```
+
+```{r}
+assignplot(dapc1)
+
+```
+
+
+# Agregamos categorias daño
+```{r}
+# cargamos los datos de las categorias de daño
+meta <- read.table("../outputs/pop_Fenotype_APAECCCA_DAPC.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
+
+pop(vcf_chambers) <- meta$suv_damozo
+```
+
+## Correr DAPC
+
+```{r}
+# corremos dapc con los grupos formados
+dapc_APAECCCA <- dapc(vcf_chambers,pop(vcf_chambers), var.contrib = TRUE, n.pca = 25, n.da = 3) 
+scatter(dapc_APAECCCA)
+
+```
+
+## Summary
+```{r}
+dapc_APAECCCA
+
+```
+
+## Porcentaje de variacion
+```{r}
+dapc_APAECCCA$var*100
+```
+
+
+## Scatter plot mountains
+
+```{r}
+scatter(dapc_APAECCCA) 
+```
+
+
+```{r}
+round(dapc_APAECCCA$posterior,3)
+```
+
+
+## Asignar plot
+
+```{r}
+assignplot(dapc_APAECCCA)
+
+```
+
+
+
+```{r }
+compoplot(dapc_APAECCCA, posi="bottomright",
+txt.leg=paste("Cluster", 1:2), lab="",
+ncol=1, xlab="individuals", col=funky(6))
+
+```
+
+
+```{r }
+
+temp <- summary(dapc(vcf_chambers,pop(vcf_chambers), n.pca = 25, n.da = 3))$assign.per.pop*100
+barplot(temp, xlab = "% of reassigment", horiz = TRUE, las=1)
+
+```
+
+```{r }
+
+temp <- summary(dapc(vcf_chambers,pop(vcf_chambers), n.pca = 15, n.da = 3))$assign.per.pop*100
+barplot(temp, xlab = "% of reassigment", horiz = TRUE, las=1)
+
+```
+
+
+
+
+## Cross validation
+```{r}
+
+# xvalDAPC r
+paj<-xvalDapc(tab(vcf_chambers,NA.method="mean"), pop(vcf_chambers))
+
+plotdapc <- scatter(paj$DAPC, mstree = T, clabel = T, lwd = 2, grid=T, cex=3,
+                    cleg = 0.80, posi.da = "bottomleft", col = c("darkgreen","chocolate1")  )
+
+
+```
+Summary Categorias
+```{r}
+
+# 
+summary(paj) 
+
+paj[2:6]
+```
+Los PC que mejor expican son 25
+```{r}
+# corremos dapc con los grupos formados
+dapc1 <- dapc(vcf_chambers,pop(vcf_chambers), var.contrib = TRUE, n.pca = 25, n.da = 3) 
+scatter(dapc1)
+
+dapc1$var*100
+
+dapc1 
+
+```
+
+
+
+```{r}
+contrib <- loadingplot(dapc1$var.contr) 
+
+```
+
+
+
+# Samples Chambers sin SRX y Aire purificado
+
+A paritr del vcf de SNPs neutros, se seleccionaron solamente las muestras de  AE (Aire Ecologia), CC (moderado de ozono), CA (contingencia de ozono). Con ellas se creo un objeto genlight. 56 muestras con 1,813 SNPs
+
+## Creamos un objeto Genlight
+```{r}
+########## dapc categorias de daño #####
+vcfR_chambers2 <- read.vcfR("../../../../VCF/GBSM_Fenotype_AECCCA.recode.vcf")
+vcf_chambers2<-vcfR2genlight(vcfR_chambers2)
+vcf_chambers2
+```
+
+## Identificamos clusters
+
+```{r}
+
+# corremos find.cluster, se escoje un numero maximo de clusters 
+grp <- find.clusters(vcf_chambers2, max.n.clust = 20, n.pca = 70, choose = FALSE, stat = "BIC", method = "kmeans")
+
+plot(grp$Kstat, type = "o", xlab = "numero de grupos (K)",
+     ylab = "BIC",
+     main = "find.clusters")
+
+
+```
+Las muestras se distribuyen entre 3 y 4 grupos. Exportamos los grupos a los que pertenecen en un csv
+
+```{r}
 
 # guardamos los resultados
 grupos_formados <- as.data.frame(grp$grp)
-write.csv(grupos_formados, "../outputs/grupos_formados_find.clusters_2.csv")
+write.csv(grupos_formados, "../outputs/grupos_formados_find.clusters_Chambers_AXAP.csv")
 
 ```
+
+## Identificamos Pcs
+
+```{r}
+
+# corremos dapc con los grupos formados
+dapc2 <- dapc(vcf_chambers2, grp$grp, n.pca = 70, n.da = 3) 
+
+temp <- optim.a.score(dapc2)
+
+```
+
+Los primeros 6 pc son los optimos.
 
 
 ```{r}
 # corremos dapc con los grupos formados
-dapc1 <- dapc(vcf_chambers, grp$grp, n.pca = 50, n.da = 2) 
-scatter(dapc1) # graficamos, los resultados indican que el efecto placa sigue
+dapc2 <- dapc(vcf_chambers2, grp$grp, n.pca = 6, n.da = 3) 
 
+dapc2
 ```
 
+```{r}
+
+myCol <- c("darkblue","purple","green","orange","red","blue")
+
+scatter(dapc2, scree.da=T, bg="white",scree.pca=TRUE, pch=20, cell=0, cstar=0, col=myCol, solid=.4,
+cex=3,clab=0, leg=TRUE, txt.leg=paste("Cluster",1:6))
+```
 
 
 ```{r}
-########## dapc categorias de daño #####
-vcfR_chambers2 <- read.vcfR("../../../../VCF/vcf_filtrado_ozoned.vcf")
-vcf_chambers2<-vcfR2genlight(vcfR_chambers2)
-
+scatter(dapc2,1,1, col=myCol, bg="white",
+scree.da=FALSE, legend=TRUE, solid=.4)
 
 ```
 
-
+## Agregamos Categorias de daño
 
 ```{r}
 # cargamos los datos de las categorias de daño
-meta <- read.table("../metadata/pops_ozonedAECCCA.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
+meta <- read.table("../outputs/pop_Fenotype_AECCCA.txt", header=TRUE, sep="\t")  # Si está separado por tabulaciones
 
-pop(vcf_chambers2) <- meta$Group
+pop(vcf_chambers2) <- meta$suv_damozo
 
-vcf_chambers2@ind.names
 
 ```
 
+## Cross Validation
 
 ```{r}
+
 # xvalDAPC r
 paj<-xvalDapc(tab(vcf_chambers2,NA.method="mean"), pop(vcf_chambers2))
 plotdapc <- scatter(paj$DAPC, mstree = T, clabel = T, lwd = 2, grid=T, cex=3,
-                    cleg = 0.80, posi.da = "bottomleft", col = c("darkgreen","gold2", "chocolate1", "red4")  )
+                    cleg = 0.80, posi.da = "bottomleft", col = c("darkgreen","chocolate1")  )
+
+
+```
+
+```{r}
+summary(paj) 
+```
+
+```{r}
+paj[2:6]
+```
+Los PC que mejor expican son 10
+
+```{r}
+# corremos dapc con los grupos formados
+dapc2 <- dapc(vcf_chambers2,pop(vcf_chambers2), var.contrib = TRUE, n.pca = 10, n.da = 3) 
+scatter(dapc2)
+```
+
+```{r}
+dapc2$var*100
+```
+```{r}
+dapc2
 ```
 
 
 ```{r}
+dapc2$var*100
+```
+```{r}
+dapc2
+```
+
+```{r}
+dapc2$var*100
+```
+```{r}
+dapc2
+```
+
+```{r}
+scatter(dapc2) 
+```
+
+```{r}
+contrib <- loadingplot(dapc2$var.contr) 
+
+```
+```{r}
+
+summary(dapc2) 
 
 ```
 
 
 ```{r}
+assignplot(dapc2)
+
+```
+
+
+#Get changes in locus
+```{r}
+library(adegenet)
+
+vcf_chambers_genind <- vcfR2genind(vcfR_chambers)
+
+freq688<- tab(genind2genpop(vcf_chambers_genind[position("688")]),freq = TRUE) 
+
+# Seleccionar la columna de la posición 688 en el objeto genlight
+genind_688 <- vcf_chambers[, "688"]
+
+# Calcular las frecuencias para la posición 688
+freq688 <- tab(genind_688, freq = TRUE)
+
+# Mostrar los resultados
+print(freq688)
+
+
 
 ```
 
 
 
+# DAPC interactivo
 
-
-
+```{r}
+# adegenetServer(what = "DAPC")
+```

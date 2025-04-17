@@ -400,14 +400,14 @@ vcf_filtrado@gt <- vcf@gt[, !(colnames(vcf@gt) %in% muestras_a_descartar)]
 colnames(vcf_filtrado@gt)
 
 #Reescribir el vcf
-write.vcf(vcf_filtrado, file = "../outputs/vcfNeutral_filtrado.vcf")
+write.vcf(vcf_filtrado, file = "vcfNeutral_filtrado.vcf")
 
 
 #Descarta muestras de transcriptomica,gametofitos y replicas
-vcf_GBS.fn <- "../outputs/vcfNeutral_filtrado.vcf"
+vcf_GBS.fn <- "../../../../VCF/vcfNeutral_filtrado.vcf"
 
 
-gds_GBS.fn <- "Neutral.gds"
+gds_GBS.fn <- "Neutrales.gds"
 snpgdsVCF2GDS(vcf_GBS.fn, gds_GBS.fn, method="biallelic.only")
 
 # Abrir archivo GDS
@@ -441,7 +441,6 @@ rownames(kin_matrixGBSNeut) <- colnames(kin_matrixGBSNeut) <- kinshipGBS$sample.
 
 
 ```{r}
-
 
 
 pheatmap(kin_matrixGBSNeut, 
@@ -493,7 +492,6 @@ pheatmap(kin_matrixGBSNeut,
 ```
 
 
-
 ```{r}
 p<- pheatmap(kin_matrixGBSNeut, 
          annotation_row = ann_treatsample, 
@@ -507,12 +505,6 @@ p<- pheatmap(kin_matrixGBSNeut,
          labels_row = rep("", nrow(kin_matrixGBSNeut)),  
          labels_col = rep("", ncol(kin_matrixGBSNeut))   
 )
-
-
-# Visualizar la estructura del dendrograma
-plot(p$tree_row)
-
-
 #Extraer orden de las muestras
 orden_columnas_Neu <- colnames(kin_matrixGBSNeut)[p$tree_col$order]
 print(orden_columnas_Neu)
@@ -878,15 +870,6 @@ vector_filtred_chamber <- orden_columnas_Neu[sapply(orden_columnas_Neu, function
 
 
 PWOCham <- vector_filtred_chamber
-
-# Vector con los nombres de las muestras que quieres eliminar
-#a_eliminar <- c("AP12_N04TAF", 
-#                "AE13_N04TAF", "AX28_N04TAF",
-#                "CA27_N04TAF","AX05_N04TAF", "CA06_N04TAF", "AP14_N04TAF", "CA09_N04TAF")
-
-# Filtrar el vector para quedarte solo con las que NO están en 'a_eliminar'
-#PWOCham_filtrado <- PWOCham[!PWOCham %in% a_eliminar]
-
 kin_PWOCham <- kin_matrixGBSNeut[PWOCham, PWOCham]
 diag_lower <- lower.tri(kin_PWOCham, diag = FALSE)
 values_lower <- kin_PWOCham[diag_lower]
